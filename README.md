@@ -1,0 +1,101 @@
+# agent-monitor
+
+One roster for every agent on a daemon. Sidebar surface (`Agent monitor`) plus a global Command
+Center item (`Open agent monitor`).
+
+Answers "which of my 38 agents needs me right now" without walking the workspace tree.
+
+## Screenshots
+
+Names and session titles in these screenshots are synthetic; the underlying browser DOM was
+rewritten before capture so no private project, workspace, or session identifiers are published.
+
+### Project-first roster
+
+![Agent Monitor project-first roster](docs/images/agent-monitor-roster.png)
+
+### Monitor settings
+
+![Agent Monitor settings sheet](docs/images/agent-monitor-settings.png)
+
+## What it shows
+
+- Counts and filters by triage bucket: Attention, Running, Idle, Closed. Attention covers
+  `requiresAttention`, `status === "error"`, and pending permission requests.
+- Default layout groups agents by **project**, then by workspace under each project. Open the
+  gear beside Refresh for a settings sheet that can switch to workspace groups or a flat compact
+  list (original triage feel).
+- Settings also control float-pinned sorting, agent sort (triage / recently updated / title),
+  collapse of matching workspace headers, density, default bucket, whether Closed stays out of
+  All, and display toggles for diffs, pin dots, model, wait age, subagent counts, last error, and
+  compact placement. Preferences persist in `localStorage` on web/desktop.
+- Workspace headers show up to two workspace labels and current `+additions −deletions`
+  (additions in accent, deletions in danger when color diffs are on).
+- Per row: state and wait age on a right-aligned rail (`attentionTimestamp`, falling back to
+  `updatedAt`), model, and `lastError` inline.
+- Parent rows show their subagent count; child rows use a left indent guide.
+- Text filter over title, agent id, provider, model, cwd, project, and workspace.
+- On web and desktop, select a row to open that agent's workspace tab. Archive remains a separate
+  action.
+- Archive one agent, or sweep every closed agent (two taps).
+
+## How it reads state
+
+`usePaseo().agents.list()` pages the daemon agent directory and `usePaseo().workspaces.list()` reads
+workspace pin state, project id, and diff stats (200 per page, up to 10 pages each). Rows refresh
+from agent and workspace subscription deltas, debounced 750ms, with a 30s backstop refetch. The
+plugin borrows the selected host's connection; it opens no socket of its own.
+
+## Limits
+
+Paseo exposes no host navigation capability to plugins. On web and desktop, selecting a row works
+around that limit by assigning the hardcoded `/h/<serverId>/agent/<agentId>` app URL. This full-
+reloads Paseo, loses current app state, and can show a blank screen for a second or two. Rows remain
+plain, non-interactive list items on iOS and Android.
+
+The clean fix is a host navigation capability inside Paseo. This project cannot change Paseo
+internals, so URL navigation is the ceiling until Paseo exposes one.
+
+Settings persistence uses `localStorage` when available. On clients without it (typical
+iOS/Android WebViews may still have it; native shells may not), settings reset to defaults each
+open.
+
+Interrupting a turn is not part of `PaseoApi`, so archive is the only lifecycle action here.
+
+## Install
+
+Download the `agent-monitor-vX.Y.Z.zip` asset from a GitHub release on the Paseo daemon host, then
+extract and install its top-level directory. The archive includes the Bun lockfile and exactly the
+runtime source files Paseo needs:
+
+```bash
+unzip agent-monitor-vX.Y.Z.zip
+cd agent-monitor
+bun install --frozen-lockfile
+bunx paseo plugin install "$PWD"
+```
+
+## Develop
+
+```bash
+bun install
+bun run check
+bun test
+bun run test:coverage
+bun run typecheck
+bunx paseo plugin install /home/omer/paseo-plugins/agent-monitor
+bunx paseo plugin reload agent-monitor
+```
+
+Release Please maintains the version, changelog, tags, and GitHub releases from Conventional
+Commits. Each release includes an `agent-monitor-vX.Y.Z.zip` asset that users can extract and pass
+directly to `paseo plugin install` after `bun install --frozen-lockfile`. Paseo still installs a
+local directory rather than downloading a repository, npm package, or zip itself.
+
+The project targets Paseo 0.6 and pins `@getpaseo/client`, `@getpaseo/plugin`, and
+`@getpaseo/cli` to the compatible `^0.6.0` line. `paseo-plugin.d.ts` is generated from
+`paseo plugin init` using the local 0.6 CLI; do not hand-edit it.
+
+Tooling uses current major releases. React `19.1` and React Native `0.81` intentionally match the
+versions supplied by Paseo 0.6; upgrading them independently would violate the plugin host's exact
+React peer contract.
