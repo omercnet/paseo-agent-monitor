@@ -70,6 +70,17 @@ function pinSvgUri(color: string): string {
   return `data:image/svg+xml;base64,${btoa(PIN_SVG.replace("COLOR", color))}`;
 }
 
+const CHEVRON_DOWN_PATH = "m6 9 6 6 6-6";
+const CHEVRON_RIGHT_PATH = "m9 18 6-6-6-6";
+
+function chevronIconUri(path: string, color: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ` +
+    `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+    `<path d="${path}"/></svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
 type MonitorData = { entries: AgentEntry[]; workspaces: ReadonlyMap<string, WorkspaceSummary> };
 
 async function loadAgents(paseo: PaseoApi): Promise<AgentEntry[]> {
@@ -136,6 +147,14 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
     [theme.colors.statusDanger],
   );
   const pinIconUri = useMemo(() => pinSvgUri(theme.colors.accent), [theme.colors.accent]);
+  const chevronDownIconUri = useMemo(
+    () => chevronIconUri(CHEVRON_DOWN_PATH, theme.colors.foregroundMuted),
+    [theme.colors.foregroundMuted],
+  );
+  const chevronRightIconUri = useMemo(
+    () => chevronIconUri(CHEVRON_RIGHT_PATH, theme.colors.foregroundMuted),
+    [theme.colors.foregroundMuted],
+  );
   const { data, error, isPending, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: () => loadDirectory(paseo),
@@ -155,6 +174,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
   const [needle, setNeedle] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [sweepArmed, setSweepArmed] = useState(false);
+  const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     const clock = setInterval(() => setNow(Date.now()), CLOCK_INTERVAL_MS);
@@ -335,6 +355,8 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         gap: 2,
         backgroundColor: theme.colors.surface0,
       },
+      projectHeaderPressed: { backgroundColor: `${muted}0D` },
+      projectDisclosure: { width: 14, height: 14, opacity: 0.72 },
       workspaceHeader: {
         paddingHorizontal: gutter,
         paddingTop: 8,
@@ -697,6 +719,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
 
   const renderProject = useCallback(
     ({ item: project }: { item: ProjectGroup }) => {
+      const collapsed = collapsedProjects.has(project.id);
       const collapsedWorkspace =
         project.workspaces.length === 1 &&
         shouldCollapseWorkspace(
@@ -708,8 +731,26 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
           : null;
       return (
         <View>
-          <View style={styles.projectHeader}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${project.name} project`}
+            accessibilityState={{ expanded: !collapsed }}
+            onPress={() => {
+              setCollapsedProjects((current) => {
+                const next = new Set(current);
+                if (next.has(project.id)) next.delete(project.id);
+                else next.add(project.id);
+                return next;
+              });
+            }}
+            style={({ pressed }) => [styles.projectHeader, pressed && styles.projectHeaderPressed]}
+          >
             <View style={styles.headerTitleLine}>
+              <Image
+                source={{ uri: collapsed ? chevronRightIconUri : chevronDownIconUri }}
+                style={styles.projectDisclosure}
+                accessible={false}
+              />
               {settings.showPinDots && (collapsedWorkspace?.pinned || project.pinned) ? (
                 layout.platform === "web" ? (
                   <Image
@@ -738,12 +779,23 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
                 {collapsedWorkspace.labels.slice(0, 2).join(" · ")}
               </Text>
             ) : null}
-          </View>
-          {project.workspaces.map((group) => renderWorkspaceGroup(group, project))}
+          </Pressable>
+          {collapsed
+            ? null
+            : project.workspaces.map((group) => renderWorkspaceGroup(group, project))}
         </View>
       );
     },
-    [layout.platform, pinIconUri, renderWorkspaceGroup, settings, styles],
+    [
+      chevronDownIconUri,
+      chevronRightIconUri,
+      collapsedProjects,
+      layout.platform,
+      pinIconUri,
+      renderWorkspaceGroup,
+      settings,
+      styles,
+    ],
   );
 
   const separator = useCallback(() => <View style={styles.separator} />, [styles]);
