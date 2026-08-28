@@ -93,8 +93,9 @@ directly to `paseo plugin install` after `bun install --frozen-lockfile`. Paseo 
 local directory rather than downloading a repository, npm package, or zip itself.
 
 The project targets Paseo 0.6 and pins `@getpaseo/client`, `@getpaseo/plugin`, and
-`@getpaseo/cli` to the compatible `^0.6.0` line. `paseo-plugin.d.ts` is generated from
-`paseo plugin init` using the local 0.6 CLI; do not hand-edit it.
+`@getpaseo/cli` to the compatible `^0.6.0` line. Renovate groups all `@getpaseo/*` updates so
+they move together. `paseo-plugin.d.ts` is generated from `paseo plugin init` using the local 0.6
+CLI; do not hand-edit it.
 
 Tooling uses current major releases. React `19.1` and React Native `0.81` intentionally match the
 versions supplied by Paseo 0.6; upgrading them independently would violate the plugin host's exact
