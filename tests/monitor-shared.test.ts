@@ -320,6 +320,24 @@ describe("project grouping", () => {
       "workspace-unlisted",
     ]);
   });
+
+  test("merges a listed and an unlisted workspace even with no registry", () => {
+    const listed = entry(
+      { id: "listed", workspaceId: pinnedWorkspace.id },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Pinned workspace" },
+    );
+    const unlisted = entry(
+      { id: "unlisted", workspaceId: "workspace-unlisted" },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Unlisted workspace" },
+    );
+    const projects = groupByProject([listed, unlisted], directory([pinnedWorkspace]), TRIAGE);
+
+    expect(projects.map((project) => project.id)).toEqual(["project-1"]);
+    expect(projects[0]?.workspaces.map((group) => group.workspace.id)).toEqual([
+      "workspace-pinned",
+      "workspace-unlisted",
+    ]);
+  });
 });
 
 describe("buildRoster", () => {

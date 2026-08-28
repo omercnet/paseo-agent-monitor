@@ -29,6 +29,10 @@ export type MonitorDirectory = {
   projects: ProjectIndex;
 };
 
+/**
+ * Indexes each project under its id and its key so either identifier resolves it. A project whose
+ * key collides with another project's id overwrites that entry, so the last one listed wins.
+ */
 export function indexProjects(
   projects: readonly { id: string; key?: string | null; name: string }[],
 ): ProjectIndex {
@@ -187,16 +191,40 @@ function sortWorkspaces(workspaces: WorkspaceGroup[], options: GroupOptions): vo
   });
 }
 
-function resolveWorkspace(entry: AgentEntry, directory: MonitorDirectory): WorkspaceSummary {
+/**
+ * A listed workspace per project key, so an agent whose own workspace is unlisted can borrow its
+ * sibling's project identity instead of grouping under the raw key. This keeps the project roster
+ * correct when the registry is empty or missing that project.
+ */
+function siblingsByProjectKey(
+  entries: readonly AgentEntry[],
+  workspaces: ReadonlyMap<string, WorkspaceSummary>,
+): ReadonlyMap<string, WorkspaceSummary> {
+  const siblings = new Map<string, WorkspaceSummary>();
+  for (const entry of entries) {
+    const key = entry.project.projectKey;
+    if (siblings.has(key)) continue;
+    const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+    if (workspace) siblings.set(key, workspace);
+  }
+  return siblings;
+}
+
+function resolveWorkspace(
+  entry: AgentEntry,
+  directory: MonitorDirectory,
+  siblings: ReadonlyMap<string, WorkspaceSummary>,
+): WorkspaceSummary {
   const workspaceId = entry.agent.workspaceId ?? `agent:${entry.agent.id}`;
   const known = directory.workspaces.get(workspaceId);
   if (known) return known;
   const project = directory.projects.get(entry.project.projectKey);
+  const sibling = siblings.get(entry.project.projectKey);
   return {
     id: workspaceId,
     name: entry.project.workspaceName?.trim() || entry.project.projectName,
-    projectId: project?.id ?? entry.project.projectKey,
-    projectName: project?.name ?? entry.project.projectName,
+    projectId: project?.id ?? sibling?.projectId ?? entry.project.projectKey,
+    projectName: project?.name ?? sibling?.projectName ?? entry.project.projectName,
     pinned: false,
     labels: [],
     additions: 0,
@@ -209,9 +237,10 @@ function workspaceGroups(
   directory: MonitorDirectory,
   options: GroupOptions,
 ): WorkspaceGroup[] {
+  const siblings = siblingsByProjectKey(entries, directory.workspaces);
   const groups = new Map<string, WorkspaceGroup>();
   for (const entry of entries) {
-    const workspace = resolveWorkspace(entry, directory);
+    const workspace = resolveWorkspace(entry, directory, siblings);
     const group = groups.get(workspace.id);
     if (group) group.entries.push(entry);
     else groups.set(workspace.id, { workspace, entries: [entry] });

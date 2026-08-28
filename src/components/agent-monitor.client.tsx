@@ -271,6 +271,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         gap: 10,
         alignItems: "flex-start" as const,
       },
+      // Alpha composite: the SDK has no danger-tint token for a highlighted destructive target.
       rowSweepTarget: { backgroundColor: `${theme.colors.statusDanger}1A` },
       rowMain: {
         flex: 1,
@@ -344,6 +345,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       empty: { padding: gutter, color: muted },
       error: { paddingHorizontal: gutter, paddingTop: 10, color: theme.colors.statusDanger },
       settingsOverlay: { ...fill, zIndex: 20, justifyContent: "flex-end" as const },
+      // Alpha composite: the SDK has no scrim token, and a modal scrim must be translucent.
       settingsBackdrop: { ...fill, backgroundColor: `${theme.colors.foreground}66` },
       settingsSheet: {
         alignSelf: "center" as const,

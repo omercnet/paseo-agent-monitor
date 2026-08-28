@@ -19,7 +19,6 @@
     "coding-agents"
   ],
   "files": [
-    "bun.lock",
     "index.ts",
     "src",
     "docs",
