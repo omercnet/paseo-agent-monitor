@@ -56,8 +56,16 @@ around that limit by assigning the hardcoded `/h/<serverId>/agent/<agentId>` app
 reloads Paseo, loses current app state, and can show a blank screen for a second or two. Rows remain
 plain, non-interactive list items on iOS and Android.
 
-The clean fix is a host navigation capability inside Paseo. This project cannot change Paseo
-internals, so URL navigation is the ceiling until Paseo exposes one.
+The clean fix is a host navigation capability inside Paseo. That capability is in review as
+[paseo#3901](https://github.com/getpaseo/paseo/pull/3901); until it ships in a host release, URL
+navigation is the ceiling.
+
+Mobile is unverified and probably broken by the host, not by this plugin: plugin surfaces that
+render `ScrollView` or `FlatList` crash on iOS and Android with `useBottomSheetInternal cannot be
+used out of the BottomSheet`
+([paseo#3930](https://github.com/getpaseo/paseo/issues/3930), open). The roster is a `FlatList` and
+the settings sheet is a `ScrollView`, so treat this plugin as web and desktop only until that fix
+lands.
 
 Settings persistence uses `localStorage` when available. On clients without it (typical
 iOS/Android WebViews may still have it; native shells may not), settings reset to defaults each
