@@ -1,8 +1,9 @@
 import type { PaseoApi, PaseoWorkspace } from "@getpaseo/client";
-import { Icon, type PluginSurfaceProps, usePaseo } from "@getpaseo/plugin";
+import { Icon, type PluginSurfaceProps, usePaseo, useRpc } from "@getpaseo/plugin";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { buildVersion, PACKAGE_VERSION } from "../lib/build-version.shared";
 import {
   type AgentEntry,
   age,
@@ -104,12 +105,18 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
 
 export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
   const paseo = usePaseo();
+  const loadBuildVersion = useRpc(buildVersion);
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-monitor", "agents", host.id], [host.id]);
   const { data, error, isPending, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: () => loadDirectory(paseo),
     refetchInterval: BACKSTOP_REFETCH_MS,
+  });
+  const { data: versionData } = useQuery({
+    queryKey: ["agent-monitor", "build-version", host.id],
+    queryFn: () => loadBuildVersion({}),
+    staleTime: Number.POSITIVE_INFINITY,
   });
 
   const [boot] = useState(() => {
@@ -466,8 +473,9 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         borderRadius: 9,
         backgroundColor: theme.colors.surface0,
       },
-      settingsFooter: { marginTop: 18, alignItems: "center" as const },
+      settingsFooter: { marginTop: 18, alignItems: "center" as const, gap: 4 },
       settingsReset: { paddingVertical: 6, paddingHorizontal: 10 },
+      settingsVersion: { color: muted, fontSize: 10 },
     } satisfies Record<string, object> & SettingsPanelStyles;
   }, [layout.compact, settings.density, theme]);
 
@@ -812,6 +820,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         open={settingsOpen}
         settings={settings}
         styles={styles}
+        version={versionData?.version ?? PACKAGE_VERSION}
         onChange={patchSettings}
         onClose={() => setSettingsOpen(false)}
         onReset={resetSettings}
