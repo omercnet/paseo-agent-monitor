@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/omercnet/paseo-agent-monitor/compare/v0.2.0...v0.2.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **settings:** stop reading the plugin version from disk ([#14](https://github.com/omercnet/paseo-agent-monitor/issues/14)) ([27904e6](https://github.com/omercnet/paseo-agent-monitor/commit/27904e6259d1811d4858cf38b0c9cd676585687a))
+
 ## [0.2.0](https://github.com/omercnet/paseo-agent-monitor/compare/v0.1.0...v0.2.0) (2026-08-28)
 
 
