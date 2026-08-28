@@ -1,12 +1,14 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
+import { PACKAGE_VERSION } from "./build-version.shared";
 
 const execFileAsync = promisify(execFile);
+const pluginDir = join(import.meta.dirname, "..", "..");
 
 async function git(...args: string[]): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("git", args);
+    const { stdout } = await execFileAsync("git", args, { cwd: pluginDir });
     return stdout.trim();
   } catch {
     return "";
@@ -14,13 +16,12 @@ async function git(...args: string[]): Promise<string> {
 }
 
 export async function getBuildVersion(): Promise<{ version: string }> {
-  const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
   const normalizedTag = (await git("describe", "--tags", "--exact-match", "HEAD")).replace(
     /^v/,
     "",
   );
-  if (normalizedTag === packageJson.version) return { version: packageJson.version };
+  if (normalizedTag === PACKAGE_VERSION) return { version: PACKAGE_VERSION };
 
   const hash = await git("rev-parse", "--short", "HEAD");
-  return { version: hash ? `${packageJson.version}+${hash}` : packageJson.version };
+  return { version: hash ? `${PACKAGE_VERSION}+${hash}` : PACKAGE_VERSION };
 }
