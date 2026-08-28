@@ -104,8 +104,9 @@ Commits. Each release also publishes an `agent-monitor-vX.Y.Z.zip` asset for hos
 reach GitHub from the daemon.
 
 The project targets Paseo 0.7 and pins `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol`,
-and `@getpaseo/cli` to the compatible `^0.7.0-beta.1` line. `paseo-plugin.d.ts` is generated from
-`paseo plugin init` using the local 0.7 CLI; do not hand-edit it.
+and `@getpaseo/cli` to the compatible `^0.7.0-beta.1` line. Renovate groups every `@getpaseo/*`
+update so the SDKs move together. `paseo-plugin.d.ts` is generated from `paseo plugin init` using
+the local 0.7 CLI; do not hand-edit it.
 
 Tooling uses current major releases. React `19.1` and React Native `0.81` intentionally match the
 versions supplied by Paseo 0.7; upgrading them independently would violate the plugin host's exact
