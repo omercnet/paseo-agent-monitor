@@ -4,7 +4,6 @@ import { zipSync } from "fflate";
 import packageJson from "../package.json";
 
 const releaseFiles = [
-  "bun.lock",
   "LICENSE",
   "README.md",
   "index.ts",

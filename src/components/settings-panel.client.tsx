@@ -84,9 +84,9 @@ const DISPLAY_TOGGLES: readonly { key: ToggleKey; label: string; hint: string }[
   {
     key: "colorDiffStats",
     label: "Color diff stats",
-    hint: "Additions in accent, deletions in danger",
+    hint: "Additions in success, deletions in danger",
   },
-  { key: "showPinDots", label: "Pin dots", hint: "Accent dot on pinned workspace headers" },
+  { key: "showPinDots", label: "Pin icons", hint: "Pin marker on pinned workspace headers" },
   { key: "showModel", label: "Model / provider", hint: "Show model under each agent title" },
   { key: "showAge", label: "Wait age", hint: "Age next to state on the right rail" },
   { key: "showSubagentCounts", label: "Subagent counts", hint: "N subagents on parent rows" },

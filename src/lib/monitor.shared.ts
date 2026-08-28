@@ -14,6 +14,33 @@ export type WorkspaceSummary = {
   deletions: number;
 };
 
+/** A project registered on the daemon, named by its owner rather than by a workspace row. */
+export type ProjectSummary = {
+  id: string;
+  name: string;
+};
+
+/** Registered projects indexed by project id and by the project key agents report. */
+export type ProjectIndex = ReadonlyMap<string, ProjectSummary>;
+
+/** Everything the roster needs beyond the agents themselves. */
+export type MonitorDirectory = {
+  workspaces: ReadonlyMap<string, WorkspaceSummary>;
+  projects: ProjectIndex;
+};
+
+export function indexProjects(
+  projects: readonly { id: string; key?: string | null; name: string }[],
+): ProjectIndex {
+  const index = new Map<string, ProjectSummary>();
+  for (const project of projects) {
+    const summary: ProjectSummary = { id: project.id, name: project.name };
+    index.set(project.id, summary);
+    if (project.key) index.set(project.key, summary);
+  }
+  return index;
+}
+
 export type WorkspaceGroup = { workspace: WorkspaceSummary; entries: AgentEntry[] };
 
 export type ProjectGroup = {
@@ -160,33 +187,31 @@ function sortWorkspaces(workspaces: WorkspaceGroup[], options: GroupOptions): vo
   });
 }
 
-function resolveWorkspace(
-  entry: AgentEntry,
-  workspaces: ReadonlyMap<string, WorkspaceSummary>,
-): WorkspaceSummary {
+function resolveWorkspace(entry: AgentEntry, directory: MonitorDirectory): WorkspaceSummary {
   const workspaceId = entry.agent.workspaceId ?? `agent:${entry.agent.id}`;
-  return (
-    workspaces.get(workspaceId) ?? {
-      id: workspaceId,
-      name: entry.project.workspaceName?.trim() || entry.project.projectName,
-      projectId: entry.project.projectKey,
-      projectName: entry.project.projectName,
-      pinned: false,
-      labels: [],
-      additions: 0,
-      deletions: 0,
-    }
-  );
+  const known = directory.workspaces.get(workspaceId);
+  if (known) return known;
+  const project = directory.projects.get(entry.project.projectKey);
+  return {
+    id: workspaceId,
+    name: entry.project.workspaceName?.trim() || entry.project.projectName,
+    projectId: project?.id ?? entry.project.projectKey,
+    projectName: project?.name ?? entry.project.projectName,
+    pinned: false,
+    labels: [],
+    additions: 0,
+    deletions: 0,
+  };
 }
 
 function workspaceGroups(
   entries: readonly AgentEntry[],
-  workspaces: ReadonlyMap<string, WorkspaceSummary>,
+  directory: MonitorDirectory,
   options: GroupOptions,
 ): WorkspaceGroup[] {
   const groups = new Map<string, WorkspaceGroup>();
   for (const entry of entries) {
-    const workspace = resolveWorkspace(entry, workspaces);
+    const workspace = resolveWorkspace(entry, directory);
     const group = groups.get(workspace.id);
     if (group) group.entries.push(entry);
     else groups.set(workspace.id, { workspace, entries: [entry] });
@@ -208,21 +233,18 @@ export function shouldCollapseWorkspace(
 
 export function groupByWorkspace(
   entries: readonly AgentEntry[],
-  workspaces: ReadonlyMap<string, WorkspaceSummary>,
+  directory: MonitorDirectory,
   options: GroupOptions,
 ): WorkspaceGroup[] {
-  return workspaceGroups(entries, workspaces, options);
+  return workspaceGroups(entries, directory, options);
 }
 
 export function groupByProject(
   entries: readonly AgentEntry[],
-  workspaces: ReadonlyMap<string, WorkspaceSummary>,
+  directory: MonitorDirectory,
   options: GroupOptions,
 ): ProjectGroup[] {
-  const groups = workspaceGroups(entries, workspaces, {
-    ...options,
-    floatPinned: options.floatPinned,
-  });
+  const groups = workspaceGroups(entries, directory, options);
 
   const projects = new Map<string, ProjectGroup>();
   for (const group of groups) {
@@ -235,7 +257,7 @@ export function groupByProject(
     }
     projects.set(projectId, {
       id: projectId,
-      name: group.workspace.projectName,
+      name: directory.projects.get(projectId)?.name ?? group.workspace.projectName,
       pinned: group.workspace.pinned,
       workspaces: [group],
     });
@@ -270,18 +292,9 @@ export function groupByProject(
   });
 }
 
-/** @deprecated Prefer buildRoster / groupByProject. Kept for older call sites. */
-export function groupAgents(
-  entries: readonly AgentEntry[],
-  workspaces: ReadonlyMap<string, WorkspaceSummary>,
-  options: GroupOptions = { floatPinned: true, agentSort: "triage" },
-): ProjectGroup[] {
-  return groupByProject(entries, workspaces, options);
-}
-
 export function buildRoster(
   entries: readonly AgentEntry[],
-  workspaces: ReadonlyMap<string, WorkspaceSummary>,
+  directory: MonitorDirectory,
   settings: Pick<MonitorSettings, "grouping" | "floatPinned" | "agentSort">,
 ): Roster {
   const options: GroupOptions = {
@@ -292,7 +305,7 @@ export function buildRoster(
     const pinned: AgentEntry[] = [];
     const rest: AgentEntry[] = [];
     for (const entry of entries) {
-      if (settings.floatPinned && workspaces.get(entry.agent.workspaceId ?? "")?.pinned) {
+      if (settings.floatPinned && directory.workspaces.get(entry.agent.workspaceId ?? "")?.pinned) {
         pinned.push(entry);
       } else {
         rest.push(entry);
@@ -303,9 +316,9 @@ export function buildRoster(
     return { kind: "compact", entries: [...pinned, ...rest] };
   }
   if (settings.grouping === "workspace") {
-    return { kind: "workspace", groups: groupByWorkspace(entries, workspaces, options) };
+    return { kind: "workspace", groups: groupByWorkspace(entries, directory, options) };
   }
-  return { kind: "project", projects: groupByProject(entries, workspaces, options) };
+  return { kind: "project", projects: groupByProject(entries, directory, options) };
 }
 
 export function childCounts(entries: readonly AgentEntry[]): ReadonlyMap<string, number> {

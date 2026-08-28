@@ -1,8 +1,8 @@
 import type { PaseoApi, PaseoWorkspace } from "@getpaseo/client";
-import { type PluginSurfaceProps, usePaseo } from "@getpaseo/plugin";
+import { Icon, type PluginSurfaceProps, usePaseo } from "@getpaseo/plugin";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Image, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import {
   type AgentEntry,
   age,
@@ -12,6 +12,8 @@ import {
   bucketOf,
   buildRoster,
   childCounts,
+  indexProjects,
+  type MonitorDirectory,
   matches,
   PARENT_AGENT_ID_LABEL,
   type ProjectGroup,
@@ -38,50 +40,9 @@ const REFRESH_DEBOUNCE_MS = 750;
 const BACKSTOP_REFETCH_MS = 30_000;
 const CLOCK_INTERVAL_MS = 15_000;
 
-const SETTINGS_GEAR_PATH =
-  "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915";
+type MonitorData = { entries: AgentEntry[]; directory: MonitorDirectory };
 
-function settingsGearIconUri(color: string): string {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ` +
-    `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
-    `<path d="${SETTINGS_GEAR_PATH}"/><circle cx="12" cy="12" r="3"/></svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
-}
-const ARCHIVE_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-archive-icon lucide-archive">` +
-  `<rect width="20" height="5" x="2" y="3" rx="1"/>` +
-  `<path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>` +
-  `<path d="M10 12h4"/>` +
-  `</svg>`;
-
-function archiveSvgUri(color: string): string {
-  const svg = ARCHIVE_SVG.replace("COLOR", color);
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
-}
-
-const PIN_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
-  `<path d="M12 17v5"/>` +
-  `<path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>` +
-  `</svg>`;
-
-function pinSvgUri(color: string): string {
-  return `data:image/svg+xml;base64,${btoa(PIN_SVG.replace("COLOR", color))}`;
-}
-
-const CHEVRON_DOWN_PATH = "m6 9 6 6 6-6";
-const CHEVRON_RIGHT_PATH = "m9 18 6-6-6-6";
-
-function chevronIconUri(path: string, color: string): string {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ` +
-    `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
-    `<path d="${path}"/></svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
-}
-
-type MonitorData = { entries: AgentEntry[]; workspaces: ReadonlyMap<string, WorkspaceSummary> };
+const EMPTY_DIRECTORY: MonitorDirectory = { workspaces: new Map(), projects: new Map() };
 
 async function loadAgents(paseo: PaseoApi): Promise<AgentEntry[]> {
   const entries: AgentEntry[] = [];
@@ -113,7 +74,11 @@ async function loadWorkspaces(paseo: PaseoApi): Promise<PaseoWorkspace[]> {
 }
 
 async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
-  const [entries, workspaces] = await Promise.all([loadAgents(paseo), loadWorkspaces(paseo)]);
+  const [entries, workspaces, registry] = await Promise.all([
+    loadAgents(paseo),
+    loadWorkspaces(paseo),
+    paseo.projects.list(),
+  ]);
   const workspaceSummaries = new Map<string, WorkspaceSummary>();
   for (const workspace of workspaces) {
     workspaceSummaries.set(workspace.id, {
@@ -127,34 +92,20 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
       deletions: workspace.diffStat?.deletions ?? 0,
     });
   }
-  return { entries, workspaces: workspaceSummaries };
+  const projects = indexProjects(
+    registry.projects.map((project) => ({
+      id: project.projectId,
+      key: project.projectKey,
+      name: project.projectCustomName?.trim() || project.projectDisplayName,
+    })),
+  );
+  return { entries, directory: { workspaces: workspaceSummaries, projects } };
 }
 
 export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
   const paseo = usePaseo();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-monitor", "agents", host.id], [host.id]);
-  const settingsIconUri = useMemo(
-    () => settingsGearIconUri(theme.colors.foregroundMuted),
-    [theme.colors.foregroundMuted],
-  );
-  const archiveIconUri = useMemo(
-    () => archiveSvgUri(theme.colors.foregroundMuted),
-    [theme.colors.foregroundMuted],
-  );
-  const archiveIconPressedUri = useMemo(
-    () => archiveSvgUri(theme.colors.statusDanger),
-    [theme.colors.statusDanger],
-  );
-  const pinIconUri = useMemo(() => pinSvgUri(theme.colors.accent), [theme.colors.accent]);
-  const chevronDownIconUri = useMemo(
-    () => chevronIconUri(CHEVRON_DOWN_PATH, theme.colors.foregroundMuted),
-    [theme.colors.foregroundMuted],
-  );
-  const chevronRightIconUri = useMemo(
-    () => chevronIconUri(CHEVRON_RIGHT_PATH, theme.colors.foregroundMuted),
-    [theme.colors.foregroundMuted],
-  );
   const { data, error, isPending, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: () => loadDirectory(paseo),
@@ -219,7 +170,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
   }, []);
 
   const entries = data?.entries ?? [];
-  const workspaces = data?.workspaces ?? new Map<string, WorkspaceSummary>();
+  const directory = data?.directory ?? EMPTY_DIRECTORY;
   const counts = useMemo(() => {
     const totals: Record<Bucket, number> = { attention: 0, running: 0, idle: 0, closed: 0 };
     for (const entry of entries) totals[bucketOf(entry.agent)] += 1;
@@ -242,14 +193,14 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       }
       return matches(entry, search);
     });
-    return buildRoster(filtered, workspaces, settings);
-  }, [entries, needle, selected, settings, workspaces]);
+    return buildRoster(filtered, directory, settings);
+  }, [directory, entries, needle, selected, settings]);
 
   const styles = useMemo(() => {
     const gutter = layout.compact ? 12 : 20;
     const rowPad = settings.density === "compact" ? 6 : 10;
     const muted = theme.colors.foregroundMuted;
-    const borderMuted = `${muted}40`;
+    const border = theme.colors.border;
     const fill = { position: "absolute" as const, top: 0, right: 0, bottom: 0, left: 0 };
     const rowAlign = {
       flexDirection: "row" as const,
@@ -270,7 +221,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       syncing: { color: muted, fontSize: 11, opacity: 0.8 },
       syncingHidden: { opacity: 0 },
       chips: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 8 },
-      chip: { ...chipBase, borderColor: borderMuted },
+      chip: { ...chipBase, borderColor: border },
       chipOn: {
         ...chipBase,
         borderColor: theme.colors.accent,
@@ -284,7 +235,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         paddingVertical: 8,
         paddingHorizontal: 10,
         borderWidth: 1,
-        borderColor: borderMuted,
+        borderColor: border,
         fontSize: 13,
       },
       actions: { ...rowAlign, gap: 8 },
@@ -293,26 +244,24 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         paddingHorizontal: 12,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: borderMuted,
+        borderColor: border,
       },
       refreshAction: {
         paddingVertical: 3,
         paddingHorizontal: 8,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: borderMuted,
+        borderColor: border,
       },
       gearButton: {
         width: 26,
         height: 26,
         borderRadius: 13,
         borderWidth: 1,
-        borderColor: borderMuted,
+        borderColor: border,
         alignItems: "center" as const,
         justifyContent: "center" as const,
       },
-      gearGlyph: { width: 16, height: 16 },
-      gearGlyphFallback: { fontSize: 14, lineHeight: 16, color: muted, marginTop: -1 },
       actionText: { color: theme.colors.foreground, fontSize: 12 },
       dangerText: { color: theme.colors.statusDanger, fontSize: 12 },
       row: {
@@ -346,7 +295,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       childRow: {
         paddingLeft: gutter,
         borderLeftWidth: 2,
-        borderLeftColor: `${muted}26`,
+        borderLeftColor: border,
       },
       projectHeader: {
         paddingHorizontal: gutter,
@@ -355,8 +304,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         gap: 2,
         backgroundColor: theme.colors.surface0,
       },
-      projectHeaderPressed: { backgroundColor: `${muted}0D` },
-      projectDisclosure: { width: 14, height: 14, opacity: 0.72 },
+      projectHeaderPressed: { backgroundColor: theme.colors.surface1 },
       workspaceHeader: {
         paddingHorizontal: gutter,
         paddingTop: 8,
@@ -365,8 +313,6 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         backgroundColor: theme.colors.surface0,
       },
       headerTitleLine: { ...rowAlign, gap: 8 },
-      pinIcon: { width: 12, height: 12 },
-      pinDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.accent },
       projectTitle: {
         flex: 1,
         color: theme.colors.foreground,
@@ -381,7 +327,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       },
       headerMeta: { color: muted, fontSize: 11 },
       diffStat: { flexDirection: "row" as const, gap: 4 },
-      diffAdd: { color: theme.colors.accent, fontSize: 11 },
+      diffAdd: { color: theme.colors.statusSuccess, fontSize: 11 },
       diffDel: { color: theme.colors.statusDanger, fontSize: 11 },
       diffMuted: { color: muted, fontSize: 11 },
       rowRight: { ...rowAlign, height: 20, gap: 10 },
@@ -393,27 +339,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         justifyContent: "center" as const,
       },
       iconButtonPressed: { opacity: 0.55 },
-      archiveSvg: { width: 16, height: 16 },
-      archiveIcon: {
-        width: 16,
-        height: 12,
-        marginTop: 2,
-        borderWidth: 1.5,
-        borderRadius: 2,
-        alignItems: "center" as const,
-        paddingTop: 3,
-      },
-      archiveLid: {
-        position: "absolute" as const,
-        top: -4,
-        left: -2,
-        width: 17,
-        height: 4,
-        borderWidth: 1.5,
-        borderRadius: 1,
-      },
-      archiveSlot: { width: 5, height: 1.5, borderRadius: 1 },
-      separator: { height: 1, backgroundColor: muted, opacity: 0.15 },
+      separator: { height: 1, backgroundColor: border },
       listContent: { paddingTop: 6 },
       empty: { padding: gutter, color: muted },
       error: { paddingHorizontal: gutter, paddingTop: 10, color: theme.colors.statusDanger },
@@ -424,21 +350,21 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         width: "100%" as const,
         maxWidth: 560,
         maxHeight: "88%" as const,
-        backgroundColor: theme.colors.surface0,
+        backgroundColor: theme.colors.surface1,
         borderTopLeftRadius: 16,
         borderTopRightRadius: 16,
         paddingHorizontal: gutter,
         paddingTop: 8,
         paddingBottom: gutter,
         borderTopWidth: 1,
-        borderColor: `${muted}33`,
+        borderColor: border,
       },
       settingsHandle: {
         alignSelf: "center" as const,
         width: 36,
         height: 4,
         borderRadius: 2,
-        backgroundColor: `${muted}40`,
+        backgroundColor: theme.colors.surface2,
         marginTop: 2,
         marginBottom: 6,
       },
@@ -447,14 +373,14 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         justifyContent: "space-between" as const,
         paddingBottom: 10,
         borderBottomWidth: 1,
-        borderBottomColor: `${muted}26`,
+        borderBottomColor: border,
       },
       settingsTitle: { color: theme.colors.foreground, fontSize: 16, fontWeight: "700" as const },
       settingsCloseButton: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: `${muted}1A`,
+        backgroundColor: theme.colors.surface2,
         alignItems: "center" as const,
         justifyContent: "center" as const,
       },
@@ -472,13 +398,13 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       settingsGroup: {
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: `${muted}26`,
+        borderColor: border,
         overflow: "hidden" as const,
       },
       settingsRow: { paddingHorizontal: 12 },
       settingsRowDivider: {
         borderTopWidth: 1,
-        borderTopColor: `${muted}1A`,
+        borderTopColor: border,
       },
       settingsField: { marginBottom: 12 },
       settingsFieldLabel: { color: muted, fontSize: 12, marginBottom: 6 },
@@ -486,7 +412,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         flexDirection: "row" as const,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: `${muted}33`,
+        borderColor: border,
         overflow: "hidden" as const,
       },
       choiceOption: {
@@ -497,7 +423,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         paddingHorizontal: 8,
         paddingVertical: 7,
       },
-      choiceOptionDivider: { borderLeftWidth: 1, borderLeftColor: `${muted}33` },
+      choiceOptionDivider: { borderLeftWidth: 1, borderLeftColor: border },
       choiceOptionOn: { backgroundColor: theme.colors.accent },
       choiceOptionText: { color: muted, fontSize: 12 },
       choiceOptionTextOn: {
@@ -521,7 +447,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         padding: 2,
         flexDirection: "row" as const,
         justifyContent: "center" as const,
-        backgroundColor: `${muted}33`,
+        backgroundColor: theme.colors.surface2,
       },
       toggleTrackOn: {
         width: 36,
@@ -554,11 +480,13 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
           ? state
           : `${state} · ${age(waitingSince(agent), now)}`;
       const dotColor =
-        bucket === "attention"
+        agent.status === "error"
           ? theme.colors.statusDanger
-          : bucket === "running"
-            ? theme.colors.accent
-            : theme.colors.foregroundMuted;
+          : bucket === "attention"
+            ? theme.colors.statusWarning
+            : bucket === "running"
+              ? theme.colors.statusSuccess
+              : theme.colors.foregroundMuted;
       const meta = agent.model ?? agent.provider;
       const showPlacement = settings.grouping === "compact" && settings.showPlacementInCompact;
       const body = (
@@ -623,39 +551,19 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
               onPress={() => archive.mutate([agent.id])}
               style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
             >
-              {({ pressed }) => {
-                const glyph = pressed ? theme.colors.statusDanger : theme.colors.foregroundMuted;
-                return layout.platform === "web" ? (
-                  <Image
-                    source={{ uri: pressed ? archiveIconPressedUri : archiveIconUri }}
-                    style={styles.archiveSvg}
-                    accessible={false}
-                  />
-                ) : (
-                  <View style={[styles.archiveIcon, { borderColor: glyph }]}>
-                    <View style={[styles.archiveLid, { borderColor: glyph }]} />
-                    <View style={[styles.archiveSlot, { backgroundColor: glyph }]} />
-                  </View>
-                );
-              }}
+              {({ pressed }) => (
+                <Icon
+                  name="Archive"
+                  size={16}
+                  color={pressed ? theme.colors.statusDanger : theme.colors.foregroundMuted}
+                />
+              )}
             </Pressable>
           </View>
         </View>
       );
     },
-    [
-      archive,
-      archiveIconPressedUri,
-      archiveIconUri,
-      childrenByParent,
-      host.id,
-      layout.platform,
-      now,
-      settings,
-      styles,
-      sweepArmed,
-      theme,
-    ],
+    [archive, childrenByParent, host.id, layout.platform, now, settings, styles, sweepArmed, theme],
   );
 
   const renderWorkspaceHeader = useCallback(
@@ -663,15 +571,9 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       <View style={styles.workspaceHeader}>
         <View style={styles.headerTitleLine}>
           {settings.showPinDots && workspace.pinned ? (
-            layout.platform === "web" ? (
-              <Image
-                source={{ uri: pinIconUri }}
-                style={styles.pinIcon}
-                accessibilityLabel="Pinned workspace"
-              />
-            ) : (
-              <View accessibilityLabel="Pinned workspace" style={styles.pinDot} />
-            )
+            <View accessibilityLabel="Pinned workspace">
+              <Icon name="Pin" size={12} color={theme.colors.accent} />
+            </View>
           ) : null}
           <Text style={styles.workspaceTitle} numberOfLines={1} ellipsizeMode="tail">
             {workspace.name}
@@ -692,7 +594,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         ) : null}
       </View>
     ),
-    [layout.platform, pinIconUri, settings, styles],
+    [settings, styles, theme],
   );
 
   const renderWorkspaceGroup = useCallback(
@@ -746,21 +648,15 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
             style={({ pressed }) => [styles.projectHeader, pressed && styles.projectHeaderPressed]}
           >
             <View style={styles.headerTitleLine}>
-              <Image
-                source={{ uri: collapsed ? chevronRightIconUri : chevronDownIconUri }}
-                style={styles.projectDisclosure}
-                accessible={false}
+              <Icon
+                name={collapsed ? "ChevronRight" : "ChevronDown"}
+                size={14}
+                color={theme.colors.foregroundMuted}
               />
               {settings.showPinDots && (collapsedWorkspace?.pinned || project.pinned) ? (
-                layout.platform === "web" ? (
-                  <Image
-                    source={{ uri: pinIconUri }}
-                    style={styles.pinIcon}
-                    accessibilityLabel="Pinned project"
-                  />
-                ) : (
-                  <View accessibilityLabel="Pinned project" style={styles.pinDot} />
-                )
+                <View accessibilityLabel="Pinned project">
+                  <Icon name="Pin" size={12} color={theme.colors.accent} />
+                </View>
               ) : null}
               <Text style={styles.projectTitle} numberOfLines={1} ellipsizeMode="tail">
                 {project.name}
@@ -786,16 +682,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         </View>
       );
     },
-    [
-      chevronDownIconUri,
-      chevronRightIconUri,
-      collapsedProjects,
-      layout.platform,
-      pinIconUri,
-      renderWorkspaceGroup,
-      settings,
-      styles,
-    ],
+    [collapsedProjects, renderWorkspaceGroup, settings, styles, theme],
   );
 
   const separator = useCallback(() => <View style={styles.separator} />, [styles]);
@@ -827,17 +714,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
             onPress={() => setSettingsOpen(true)}
             style={styles.gearButton}
           >
-            {layout.platform === "web" ? (
-              <Image
-                source={{ uri: settingsIconUri }}
-                style={styles.gearGlyph}
-                accessible={false}
-              />
-            ) : (
-              <Text style={styles.gearGlyphFallback} accessible={false}>
-                ⚙
-              </Text>
-            )}
+            <Icon name="Settings" size={16} color={theme.colors.foregroundMuted} />
           </Pressable>
         </View>
         <View style={styles.chips}>
