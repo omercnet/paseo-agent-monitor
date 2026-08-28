@@ -11,7 +11,6 @@ const releaseFiles = [
   "docs/images/agent-monitor-settings.png",
   "src/components/agent-monitor.client.tsx",
   "src/components/settings-panel.client.tsx",
-  "src/lib/build-version.server.ts",
   "src/lib/build-version.shared.ts",
   "src/lib/monitor-settings.ts",
   "src/lib/monitor.shared.ts",
