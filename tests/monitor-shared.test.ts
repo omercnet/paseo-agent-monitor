@@ -5,7 +5,10 @@ import {
   bucketOf,
   buildRoster,
   childCounts,
-  groupAgents,
+  type GroupOptions,
+  groupByProject,
+  indexProjects,
+  type MonitorDirectory,
   matches,
   PARENT_AGENT_ID_LABEL,
   placement,
@@ -15,6 +18,18 @@ import {
   type WorkspaceSummary,
   waitingSince,
 } from "../src/lib/monitor.shared";
+
+const TRIAGE: GroupOptions = { floatPinned: true, agentSort: "triage" };
+
+function directory(
+  workspaces: readonly WorkspaceSummary[] = [],
+  projects: readonly { id: string; key?: string | null; name: string }[] = [],
+): MonitorDirectory {
+  return {
+    workspaces: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+    projects: indexProjects(projects),
+  };
+}
 
 type AgentOverrides = Partial<AgentEntry["agent"]>;
 type ProjectOverrides = Partial<AgentEntry["project"]>;
@@ -137,12 +152,10 @@ describe("project grouping", () => {
       { id: "attention", requiresAttention: true, workspaceId: "workspace-other" },
       { projectKey: "project-2", projectName: "Beta", workspaceName: "Other" },
     );
-    const projects = groupAgents(
+    const projects = groupByProject(
       [child, unpinned, sibling, parent],
-      new Map([
-        [pinnedWorkspace.id, pinnedWorkspace],
-        [siblingWorkspace.id, siblingWorkspace],
-      ]),
+      directory([pinnedWorkspace, siblingWorkspace]),
+      TRIAGE,
     );
 
     expect(projects.map((project) => project.id)).toEqual(["project-1", "project-2"]);
@@ -170,7 +183,7 @@ describe("project grouping", () => {
       { id: "idle-c", workspaceId: "workspace-c" },
       { projectKey: "project-c", projectName: "Charlie", workspaceName: "Charlie" },
     );
-    const projects = groupAgents([idleC, idleB, attention], new Map());
+    const projects = groupByProject([idleC, idleB, attention], directory(), TRIAGE);
 
     expect(projects.map((project) => project.id)).toEqual(["project-a", "project-b", "project-c"]);
   });
@@ -179,7 +192,7 @@ describe("project grouping", () => {
     const olderIdle = entry({ id: "older", updatedAt: "2026-08-25T10:00:00.000Z" });
     const newerIdle = entry({ id: "newer", updatedAt: "2026-08-25T11:00:00.000Z" });
     const running = entry({ id: "running", status: "running" });
-    const [project] = groupAgents([olderIdle, newerIdle, running], new Map());
+    const [project] = groupByProject([olderIdle, newerIdle, running], directory(), TRIAGE);
 
     expect(project?.workspaces[0]?.entries.map((item) => item.agent.id)).toEqual([
       "running",
@@ -193,7 +206,7 @@ describe("project grouping", () => {
       { id: "solo", workspaceId: "workspace-solo" },
       { projectKey: "project-solo", projectName: "Solo", workspaceName: "Solo" },
     );
-    const [project] = groupAgents([item], new Map());
+    const [project] = groupByProject([item], directory(), TRIAGE);
     expect(project).toBeDefined();
     if (!project) throw new Error("expected project group");
     const [workspaceGroup] = project.workspaces;
@@ -233,11 +246,10 @@ describe("project grouping", () => {
       { id: "attention", requiresAttention: true, workspaceId: "workspace-other" },
       { projectKey: "project-2", projectName: "Beta", workspaceName: "Other" },
     );
-    const projects = groupAgents(
-      [pinned, attention],
-      new Map([[pinnedWorkspace.id, pinnedWorkspace]]),
-      { floatPinned: false, agentSort: "triage" },
-    );
+    const projects = groupByProject([pinned, attention], directory([pinnedWorkspace]), {
+      floatPinned: false,
+      agentSort: "triage",
+    });
 
     expect(projects.map((project) => project.id)).toEqual(["project-2", "project-1"]);
   });
@@ -251,7 +263,7 @@ describe("project grouping", () => {
       { id: "a", workspaceId: "ws-a" },
       { projectKey: "project-a", projectName: "Alpha", workspaceName: "A" },
     );
-    const projects = groupAgents([zebra, alpha], new Map(), {
+    const projects = groupByProject([zebra, alpha], directory(), {
       floatPinned: true,
       agentSort: "title",
     });
@@ -264,7 +276,7 @@ describe("project grouping", () => {
       { id: "solo", workspaceId: "workspace-solo" },
       { projectKey: "project-solo", projectName: "Solo", workspaceName: "Solo" },
     );
-    const [project] = groupAgents([item], new Map());
+    const [project] = groupByProject([item], directory(), TRIAGE);
     expect(project).toBeDefined();
     if (!project) throw new Error("expected project group");
     const [workspaceGroup] = project.workspaces;
@@ -272,13 +284,67 @@ describe("project grouping", () => {
     if (!workspaceGroup) throw new Error("expected workspace group");
     expect(shouldCollapseWorkspace(project, workspaceGroup.workspace, false)).toBe(false);
   });
+
+  test("names projects from the registry, including a custom rename", () => {
+    const item = entry(
+      { id: "renamed", workspaceId: pinnedWorkspace.id },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Pinned workspace" },
+    );
+    const projects = groupByProject(
+      [item],
+      directory([pinnedWorkspace], [{ id: "project-1", key: "key-1", name: "Alpha Renamed" }]),
+      TRIAGE,
+    );
+
+    expect(projects.map((project) => project.name)).toEqual(["Alpha Renamed"]);
+  });
+
+  test("keeps an agent whose workspace is unlisted inside its registered project", () => {
+    const listed = entry(
+      { id: "listed", workspaceId: pinnedWorkspace.id },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Pinned workspace" },
+    );
+    const unlisted = entry(
+      { id: "unlisted", workspaceId: "workspace-unlisted" },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Unlisted workspace" },
+    );
+    const projects = groupByProject(
+      [listed, unlisted],
+      directory([pinnedWorkspace], [{ id: "project-1", key: "key-1", name: "Alpha" }]),
+      TRIAGE,
+    );
+
+    expect(projects.map((project) => project.id)).toEqual(["project-1"]);
+    expect(projects[0]?.workspaces.map((group) => group.workspace.id)).toEqual([
+      "workspace-pinned",
+      "workspace-unlisted",
+    ]);
+  });
+
+  test("merges a listed and an unlisted workspace even with no registry", () => {
+    const listed = entry(
+      { id: "listed", workspaceId: pinnedWorkspace.id },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Pinned workspace" },
+    );
+    const unlisted = entry(
+      { id: "unlisted", workspaceId: "workspace-unlisted" },
+      { projectKey: "key-1", projectName: "Alpha", workspaceName: "Unlisted workspace" },
+    );
+    const projects = groupByProject([listed, unlisted], directory([pinnedWorkspace]), TRIAGE);
+
+    expect(projects.map((project) => project.id)).toEqual(["project-1"]);
+    expect(projects[0]?.workspaces.map((group) => group.workspace.id)).toEqual([
+      "workspace-pinned",
+      "workspace-unlisted",
+    ]);
+  });
 });
 
 describe("buildRoster", () => {
   test("compact returns flat entries", () => {
     const older = entry({ id: "older", updatedAt: "2026-08-25T10:00:00.000Z" });
     const newer = entry({ id: "newer", updatedAt: "2026-08-25T11:00:00.000Z", status: "running" });
-    const roster = buildRoster([older, newer], new Map(), {
+    const roster = buildRoster([older, newer], directory(), {
       grouping: "compact",
       floatPinned: true,
       agentSort: "triage",
@@ -300,33 +366,27 @@ describe("buildRoster", () => {
     );
     const roster = buildRoster(
       [first, second],
-      new Map([
-        [
-          "workspace-a",
-          {
-            id: "workspace-a",
-            name: "A",
-            projectId: "project-1",
-            projectName: "Alpha",
-            pinned: false,
-            labels: [],
-            additions: 0,
-            deletions: 0,
-          },
-        ],
-        [
-          "workspace-b",
-          {
-            id: "workspace-b",
-            name: "B",
-            projectId: "project-1",
-            projectName: "Alpha",
-            pinned: false,
-            labels: [],
-            additions: 0,
-            deletions: 0,
-          },
-        ],
+      directory([
+        {
+          id: "workspace-a",
+          name: "A",
+          projectId: "project-1",
+          projectName: "Alpha",
+          pinned: false,
+          labels: [],
+          additions: 0,
+          deletions: 0,
+        },
+        {
+          id: "workspace-b",
+          name: "B",
+          projectId: "project-1",
+          projectName: "Alpha",
+          pinned: false,
+          labels: [],
+          additions: 0,
+          deletions: 0,
+        },
       ]),
       { grouping: "workspace", floatPinned: true, agentSort: "title" },
     );
