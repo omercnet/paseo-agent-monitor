@@ -47,6 +47,7 @@ export type SettingsPanelStyles = {
   toggleThumb: object;
   settingsFooter: object;
   settingsReset: object;
+  settingsVersion: object;
   dangerText: object;
 };
 
@@ -110,6 +111,7 @@ export function SettingsPanel({
   open,
   settings,
   styles,
+  version,
   onChange,
   onClose,
   onReset,
@@ -117,6 +119,7 @@ export function SettingsPanel({
   open: boolean;
   settings: MonitorSettings;
   styles: SettingsPanelStyles;
+  version?: string;
   onChange: (patch: Partial<MonitorSettings>) => void;
   onClose: () => void;
   onReset: () => void;
@@ -249,6 +252,7 @@ export function SettingsPanel({
             >
               <Text style={styles.dangerText}>Reset to defaults</Text>
             </Pressable>
+            {version ? <Text style={styles.settingsVersion}>v{version}</Text> : null}
           </View>
         </ScrollView>
       </View>
