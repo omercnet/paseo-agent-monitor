@@ -103,7 +103,7 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
   return { entries, directory: { workspaces: workspaceSummaries, projects } };
 }
 
-export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
+export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceProps) {
   const paseo = usePaseo();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-monitor", "agents", host.id], [host.id]);
@@ -530,15 +530,11 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
           accessibilityState={{ selected: sweepArmed && bucket === "closed" }}
           style={[styles.row, sweepArmed && bucket === "closed" ? styles.rowSweepTarget : null]}
         >
-          {layout.platform === "web" ? (
+          {navigation ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Open agent ${title(item)}`}
-              onPress={() =>
-                globalThis.location.assign(
-                  `/h/${encodeURIComponent(host.id)}/agent/${encodeURIComponent(agent.id)}`,
-                )
-              }
+              onPress={() => navigation.openAgent({ agentId: agent.id })}
               style={styles.rowMain}
             >
               {body}
@@ -567,38 +563,52 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         </View>
       );
     },
-    [archive, childrenByParent, host.id, layout.platform, now, settings, styles, sweepArmed, theme],
+    [archive, childrenByParent, navigation, now, settings, styles, sweepArmed, theme],
   );
 
   const renderWorkspaceHeader = useCallback(
-    (workspace: WorkspaceSummary) => (
-      <View style={styles.workspaceHeader}>
-        <View style={styles.headerTitleLine}>
-          {settings.showPinDots && workspace.pinned ? (
-            <View accessibilityLabel="Pinned workspace">
-              <Icon name="Pin" size={12} color={theme.colors.accent} />
-            </View>
+    (workspace: WorkspaceSummary) => {
+      const content = (
+        <>
+          <View style={styles.headerTitleLine}>
+            {settings.showPinDots && workspace.pinned ? (
+              <View accessibilityLabel="Pinned workspace">
+                <Icon name="Pin" size={12} color={theme.colors.accent} />
+              </View>
+            ) : null}
+            <Text style={styles.workspaceTitle} numberOfLines={1} ellipsizeMode="tail">
+              {workspace.name}
+            </Text>
+            {settings.showDiffStats ? (
+              <DiffStat
+                additions={workspace.additions}
+                deletions={workspace.deletions}
+                colorDiffStats={settings.colorDiffStats}
+                styles={styles}
+              />
+            ) : null}
+          </View>
+          {workspace.labels.length > 0 ? (
+            <Text style={styles.headerMeta} numberOfLines={1} ellipsizeMode="tail">
+              {workspace.labels.slice(0, 2).join(" · ")}
+            </Text>
           ) : null}
-          <Text style={styles.workspaceTitle} numberOfLines={1} ellipsizeMode="tail">
-            {workspace.name}
-          </Text>
-          {settings.showDiffStats ? (
-            <DiffStat
-              additions={workspace.additions}
-              deletions={workspace.deletions}
-              colorDiffStats={settings.colorDiffStats}
-              styles={styles}
-            />
-          ) : null}
-        </View>
-        {workspace.labels.length > 0 ? (
-          <Text style={styles.headerMeta} numberOfLines={1} ellipsizeMode="tail">
-            {workspace.labels.slice(0, 2).join(" · ")}
-          </Text>
-        ) : null}
-      </View>
-    ),
-    [settings, styles, theme],
+        </>
+      );
+      return navigation ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open workspace ${workspace.name}`}
+          onPress={() => navigation.openWorkspace({ workspaceId: workspace.id })}
+          style={styles.workspaceHeader}
+        >
+          {content}
+        </Pressable>
+      ) : (
+        <View style={styles.workspaceHeader}>{content}</View>
+      );
+    },
+    [navigation, settings, styles, theme],
   );
 
   const renderWorkspaceGroup = useCallback(

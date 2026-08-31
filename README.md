@@ -36,8 +36,8 @@ rewritten before capture so no private project, workspace, or session identifier
   falling back to `updatedAt`), model, and `lastError` inline.
 - Parent rows show their subagent count; child rows use a left indent guide.
 - Text filter over title, agent id, provider, model, cwd, project, and workspace.
-- On web and desktop, select a row to open that agent's workspace tab. Archive remains a separate
-  action.
+- Select an agent row to open that agent, or select a workspace header to open its workspace. Both
+  actions use the selected host's native navigation on web, desktop, iOS, and Android.
 - Archive one agent, or sweep every closed agent (two taps).
 
 ## How it reads state
@@ -51,14 +51,9 @@ The plugin borrows the selected host's connection; it opens no socket of its own
 
 ## Limits
 
-Paseo exposes no host navigation capability to plugins. On web and desktop, selecting a row works
-around that limit by assigning the hardcoded `/h/<serverId>/agent/<agentId>` app URL. This full-
-reloads Paseo, loses current app state, and can show a blank screen for a second or two. Rows remain
-plain, non-interactive list items on iOS and Android.
-
-The clean fix is a host navigation capability inside Paseo. That capability is in review as
-[paseo#3901](https://github.com/getpaseo/paseo/pull/3901); until it ships in a host release, URL
-navigation is the ceiling.
+Host navigation requires Paseo 0.7.0-beta.3 or newer. The SDK capability is optional so older
+clients can still render the monitor, but agent rows and workspace headers remain non-interactive
+there. The plugin does not construct private app URLs or force a full reload.
 
 Mobile is unverified and probably broken by the host, not by this plugin: plugin surfaces that
 render `ScrollView` or `FlatList` crash on iOS and Android with `useBottomSheetInternal cannot be
@@ -75,9 +70,9 @@ Interrupting a turn is not part of `PaseoApi`, so archive is the only lifecycle 
 
 ## Install
 
-Requires a Paseo daemon on 0.7.0-beta.1 or newer. Older daemons hid agents from non-legacy
-providers inside plugin sessions ([paseo#3902](https://github.com/getpaseo/paseo/pull/3902)), which
-made the roster silently incomplete.
+Requires a Paseo daemon and client on 0.7.0-beta.3 or newer. This version adds native host
+navigation and includes the earlier fix that exposes agents from non-legacy providers inside
+plugin sessions ([paseo#3902](https://github.com/getpaseo/paseo/pull/3902)).
 
 Install straight from this repository on the daemon host:
 
@@ -112,7 +107,7 @@ Commits. Each release also publishes an `agent-monitor-vX.Y.Z.zip` asset for hos
 reach GitHub from the daemon.
 
 The project targets Paseo 0.7 and pins `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol`,
-and `@getpaseo/cli` to the compatible `^0.7.0-beta.1` line. Renovate groups every `@getpaseo/*`
+and `@getpaseo/cli` to the compatible `^0.7.0-beta.3` line. Renovate groups every `@getpaseo/*`
 update so the SDKs move together. `paseo-plugin.d.ts` is generated from `paseo plugin init` using
 the local 0.7 CLI; do not hand-edit it.
 
