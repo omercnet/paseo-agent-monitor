@@ -36,8 +36,8 @@ rewritten before capture so no private project, workspace, or session identifier
   falling back to `updatedAt`), model, and `lastError` inline.
 - Parent rows show their subagent count; child rows use a left indent guide.
 - Text filter over title, agent id, provider, model, cwd, project, and workspace.
-- Select an agent row to open that agent, or select a workspace header to open its workspace. Both
-  actions use the selected host's native navigation on web, desktop, iOS, and Android.
+- Select an agent row to open that agent, or select a workspace header (or its folder button when
+  collapsed) to open its workspace. Both actions use native navigation on web and desktop.
 - Archive one agent, or sweep every closed agent (two taps).
 
 ## How it reads state
@@ -70,9 +70,9 @@ Interrupting a turn is not part of `PaseoApi`, so archive is the only lifecycle 
 
 ## Install
 
-Requires a Paseo daemon and client on 0.7.0-beta.3 or newer. This version adds native host
-navigation and includes the earlier fix that exposes agents from non-legacy providers inside
-plugin sessions ([paseo#3902](https://github.com/getpaseo/paseo/pull/3902)).
+Requires a Paseo daemon on 0.7.0-beta.1 or newer so plugin sessions include agents from non-legacy
+providers ([paseo#3902](https://github.com/getpaseo/paseo/pull/3902)). Native agent and workspace
+navigation additionally requires a Paseo 0.7.0-beta.3 or newer client.
 
 Install straight from this repository on the daemon host:
 
