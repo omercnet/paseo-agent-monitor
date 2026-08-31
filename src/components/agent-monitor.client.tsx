@@ -84,6 +84,7 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
   for (const workspace of workspaces) {
     workspaceSummaries.set(workspace.id, {
       id: workspace.id,
+      navigationId: workspace.id,
       name: workspace.name,
       projectId: workspace.projectId,
       projectName: workspace.projectDisplayName,
@@ -103,7 +104,7 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
   return { entries, directory: { workspaces: workspaceSummaries, projects } };
 }
 
-export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
+export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceProps) {
   const paseo = usePaseo();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-monitor", "agents", host.id], [host.id]);
@@ -280,6 +281,7 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         gap: 10,
         alignItems: "flex-start" as const,
       },
+      navigationPressed: { opacity: 0.65 },
       dot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
       rowBody: { flex: 1, gap: 3 },
       rowTitleLine: { ...rowAlign, gap: 6 },
@@ -299,7 +301,15 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         borderLeftWidth: 2,
         borderLeftColor: border,
       },
+      projectHeaderRow: {
+        flexDirection: "row" as const,
+        alignItems: "center" as const,
+        backgroundColor: theme.colors.surface0,
+      },
+      projectWorkspaceAction: { marginRight: gutter },
       projectHeader: {
+        flex: 1,
+        minWidth: 0,
         paddingHorizontal: gutter,
         paddingTop: 14,
         paddingBottom: 6,
@@ -308,10 +318,12 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
       },
       projectHeaderPressed: { backgroundColor: theme.colors.surface1 },
       workspaceHeader: {
+        minHeight: layout.compact ? 44 : 32,
         paddingHorizontal: gutter,
         paddingTop: 8,
         paddingBottom: 4,
         gap: 2,
+        justifyContent: "center" as const,
         backgroundColor: theme.colors.surface0,
       },
       headerTitleLine: { ...rowAlign, gap: 8 },
@@ -530,16 +542,12 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
           accessibilityState={{ selected: sweepArmed && bucket === "closed" }}
           style={[styles.row, sweepArmed && bucket === "closed" ? styles.rowSweepTarget : null]}
         >
-          {layout.platform === "web" ? (
+          {navigation ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Open agent ${title(item)}`}
-              onPress={() =>
-                globalThis.location.assign(
-                  `/h/${encodeURIComponent(host.id)}/agent/${encodeURIComponent(agent.id)}`,
-                )
-              }
-              style={styles.rowMain}
+              onPress={() => navigation.openAgent({ agentId: agent.id })}
+              style={({ pressed }) => [styles.rowMain, pressed && styles.navigationPressed]}
             >
               {body}
             </Pressable>
@@ -567,38 +575,53 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         </View>
       );
     },
-    [archive, childrenByParent, host.id, layout.platform, now, settings, styles, sweepArmed, theme],
+    [archive, childrenByParent, navigation, now, settings, styles, sweepArmed, theme],
   );
 
   const renderWorkspaceHeader = useCallback(
-    (workspace: WorkspaceSummary) => (
-      <View style={styles.workspaceHeader}>
-        <View style={styles.headerTitleLine}>
-          {settings.showPinDots && workspace.pinned ? (
-            <View accessibilityLabel="Pinned workspace">
-              <Icon name="Pin" size={12} color={theme.colors.accent} />
-            </View>
+    (workspace: WorkspaceSummary) => {
+      const navigationId = workspace.navigationId;
+      const content = (
+        <>
+          <View style={styles.headerTitleLine}>
+            {settings.showPinDots && workspace.pinned ? (
+              <View accessibilityLabel="Pinned workspace">
+                <Icon name="Pin" size={12} color={theme.colors.accent} />
+              </View>
+            ) : null}
+            <Text style={styles.workspaceTitle} numberOfLines={1} ellipsizeMode="tail">
+              {workspace.name}
+            </Text>
+            {settings.showDiffStats ? (
+              <DiffStat
+                additions={workspace.additions}
+                deletions={workspace.deletions}
+                colorDiffStats={settings.colorDiffStats}
+                styles={styles}
+              />
+            ) : null}
+          </View>
+          {workspace.labels.length > 0 ? (
+            <Text style={styles.headerMeta} numberOfLines={1} ellipsizeMode="tail">
+              {workspace.labels.slice(0, 2).join(" · ")}
+            </Text>
           ) : null}
-          <Text style={styles.workspaceTitle} numberOfLines={1} ellipsizeMode="tail">
-            {workspace.name}
-          </Text>
-          {settings.showDiffStats ? (
-            <DiffStat
-              additions={workspace.additions}
-              deletions={workspace.deletions}
-              colorDiffStats={settings.colorDiffStats}
-              styles={styles}
-            />
-          ) : null}
-        </View>
-        {workspace.labels.length > 0 ? (
-          <Text style={styles.headerMeta} numberOfLines={1} ellipsizeMode="tail">
-            {workspace.labels.slice(0, 2).join(" · ")}
-          </Text>
-        ) : null}
-      </View>
-    ),
-    [settings, styles, theme],
+        </>
+      );
+      return navigation && navigationId ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open workspace ${workspace.name}`}
+          onPress={() => navigation.openWorkspace({ workspaceId: navigationId })}
+          style={({ pressed }) => [styles.workspaceHeader, pressed && styles.navigationPressed]}
+        >
+          {content}
+        </Pressable>
+      ) : (
+        <View style={styles.workspaceHeader}>{content}</View>
+      );
+    },
+    [navigation, settings, styles, theme],
   );
 
   const renderWorkspaceGroup = useCallback(
@@ -635,58 +658,79 @@ export function AgentMonitor({ theme, layout, host }: PluginSurfaceProps) {
         )
           ? project.workspaces[0].workspace
           : null;
+      const collapsedWorkspaceId = collapsedWorkspace?.navigationId;
       return (
         <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${project.name} project`}
-            accessibilityState={{ expanded: !collapsed }}
-            onPress={() => {
-              setCollapsedProjects((current) => {
-                const next = new Set(current);
-                if (next.has(project.id)) next.delete(project.id);
-                else next.add(project.id);
-                return next;
-              });
-            }}
-            style={({ pressed }) => [styles.projectHeader, pressed && styles.projectHeaderPressed]}
-          >
-            <View style={styles.headerTitleLine}>
-              <Icon
-                name={collapsed ? "ChevronRight" : "ChevronDown"}
-                size={14}
-                color={theme.colors.foregroundMuted}
-              />
-              {settings.showPinDots && (collapsedWorkspace?.pinned || project.pinned) ? (
-                <View accessibilityLabel="Pinned project">
-                  <Icon name="Pin" size={12} color={theme.colors.accent} />
-                </View>
-              ) : null}
-              <Text style={styles.projectTitle} numberOfLines={1} ellipsizeMode="tail">
-                {project.name}
-              </Text>
-              {settings.showDiffStats && collapsedWorkspace ? (
-                <DiffStat
-                  additions={collapsedWorkspace.additions}
-                  deletions={collapsedWorkspace.deletions}
-                  colorDiffStats={settings.colorDiffStats}
-                  styles={styles}
+          <View style={styles.projectHeaderRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${project.name} project`}
+              accessibilityState={{ expanded: !collapsed }}
+              onPress={() => {
+                setCollapsedProjects((current) => {
+                  const next = new Set(current);
+                  if (next.has(project.id)) next.delete(project.id);
+                  else next.add(project.id);
+                  return next;
+                });
+              }}
+              style={({ pressed }) => [
+                styles.projectHeader,
+                pressed && styles.projectHeaderPressed,
+              ]}
+            >
+              <View style={styles.headerTitleLine}>
+                <Icon
+                  name={collapsed ? "ChevronRight" : "ChevronDown"}
+                  size={14}
+                  color={theme.colors.foregroundMuted}
                 />
+                {settings.showPinDots && (collapsedWorkspace?.pinned || project.pinned) ? (
+                  <View accessibilityLabel="Pinned project">
+                    <Icon name="Pin" size={12} color={theme.colors.accent} />
+                  </View>
+                ) : null}
+                <Text style={styles.projectTitle} numberOfLines={1} ellipsizeMode="tail">
+                  {project.name}
+                </Text>
+                {settings.showDiffStats && collapsedWorkspace ? (
+                  <DiffStat
+                    additions={collapsedWorkspace.additions}
+                    deletions={collapsedWorkspace.deletions}
+                    colorDiffStats={settings.colorDiffStats}
+                    styles={styles}
+                  />
+                ) : null}
+              </View>
+              {collapsedWorkspace && collapsedWorkspace.labels.length > 0 ? (
+                <Text style={styles.headerMeta} numberOfLines={1} ellipsizeMode="tail">
+                  {collapsedWorkspace.labels.slice(0, 2).join(" · ")}
+                </Text>
               ) : null}
-            </View>
-            {collapsedWorkspace && collapsedWorkspace.labels.length > 0 ? (
-              <Text style={styles.headerMeta} numberOfLines={1} ellipsizeMode="tail">
-                {collapsedWorkspace.labels.slice(0, 2).join(" · ")}
-              </Text>
+            </Pressable>
+            {navigation && collapsedWorkspaceId ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open workspace ${collapsedWorkspace.name}`}
+                hitSlop={6}
+                onPress={() => navigation.openWorkspace({ workspaceId: collapsedWorkspaceId })}
+                style={({ pressed }) => [
+                  styles.iconButton,
+                  styles.projectWorkspaceAction,
+                  pressed && styles.iconButtonPressed,
+                ]}
+              >
+                <Icon name="FolderOpen" size={16} color={theme.colors.foregroundMuted} />
+              </Pressable>
             ) : null}
-          </Pressable>
+          </View>
           {collapsed
             ? null
             : project.workspaces.map((group) => renderWorkspaceGroup(group, project))}
         </View>
       );
     },
-    [collapsedProjects, renderWorkspaceGroup, settings, styles, theme],
+    [collapsedProjects, navigation, renderWorkspaceGroup, settings, styles, theme],
   );
 
   const separator = useCallback(() => <View style={styles.separator} />, [styles]);

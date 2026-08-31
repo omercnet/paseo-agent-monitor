@@ -110,6 +110,7 @@ describe("agent triage", () => {
 describe("project grouping", () => {
   const pinnedWorkspace: WorkspaceSummary = {
     id: "workspace-pinned",
+    navigationId: "workspace-pinned",
     name: "Pinned workspace",
     projectId: "project-1",
     projectName: "Alpha",
@@ -121,6 +122,7 @@ describe("project grouping", () => {
 
   const siblingWorkspace: WorkspaceSummary = {
     id: "workspace-sibling",
+    navigationId: "workspace-sibling",
     name: "Sibling workspace",
     projectId: "project-1",
     projectName: "Alpha",
@@ -319,6 +321,10 @@ describe("project grouping", () => {
       "workspace-pinned",
       "workspace-unlisted",
     ]);
+    expect(projects[0]?.workspaces.map((group) => group.workspace.navigationId)).toEqual([
+      "workspace-pinned",
+      "workspace-unlisted",
+    ]);
   });
 
   test("merges a listed and an unlisted workspace even with no registry", () => {
@@ -337,6 +343,19 @@ describe("project grouping", () => {
       "workspace-pinned",
       "workspace-unlisted",
     ]);
+  });
+
+  test("keeps a synthetic workspace non-navigable when an agent has no workspace id", () => {
+    const orphan = entry(
+      { id: "orphan", workspaceId: undefined },
+      { projectKey: "project-orphan", projectName: "Orphan", workspaceName: "Orphan" },
+    );
+    const [project] = groupByProject([orphan], directory(), TRIAGE);
+
+    expect(project?.workspaces[0]?.workspace).toMatchObject({
+      id: "agent:orphan",
+      navigationId: null,
+    });
   });
 });
 
@@ -369,6 +388,7 @@ describe("buildRoster", () => {
       directory([
         {
           id: "workspace-a",
+          navigationId: "workspace-a",
           name: "A",
           projectId: "project-1",
           projectName: "Alpha",
@@ -379,6 +399,7 @@ describe("buildRoster", () => {
         },
         {
           id: "workspace-b",
+          navigationId: "workspace-b",
           name: "B",
           projectId: "project-1",
           projectName: "Alpha",
