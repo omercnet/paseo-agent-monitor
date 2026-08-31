@@ -5,7 +5,7 @@ export type AgentEntry = PaseoAgentListResult["entries"][number];
 type AgentSnapshot = AgentEntry["agent"];
 export type WorkspaceSummary = {
   id: string;
-  navigationId?: string;
+  navigationId: string | null;
   name: string;
   projectId: string;
   projectName: string;
@@ -216,7 +216,7 @@ function resolveWorkspace(
   directory: MonitorDirectory,
   siblings: ReadonlyMap<string, WorkspaceSummary>,
 ): WorkspaceSummary {
-  const navigationId = entry.agent.workspaceId ?? undefined;
+  const navigationId = entry.agent.workspaceId ?? null;
   const workspaceId = navigationId ?? `agent:${entry.agent.id}`;
   const known = directory.workspaces.get(workspaceId);
   if (known) return known;

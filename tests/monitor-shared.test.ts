@@ -354,7 +354,7 @@ describe("project grouping", () => {
 
     expect(project?.workspaces[0]?.workspace).toMatchObject({
       id: "agent:orphan",
-      navigationId: undefined,
+      navigationId: null,
     });
   });
 });
@@ -388,6 +388,7 @@ describe("buildRoster", () => {
       directory([
         {
           id: "workspace-a",
+          navigationId: "workspace-a",
           name: "A",
           projectId: "project-1",
           projectName: "Alpha",
@@ -398,6 +399,7 @@ describe("buildRoster", () => {
         },
         {
           id: "workspace-b",
+          navigationId: "workspace-b",
           name: "B",
           projectId: "project-1",
           projectName: "Alpha",

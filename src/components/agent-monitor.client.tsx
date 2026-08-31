@@ -306,7 +306,10 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
         alignItems: "center" as const,
         backgroundColor: theme.colors.surface0,
       },
+      projectWorkspaceAction: { marginRight: gutter },
       projectHeader: {
+        flex: 1,
+        minWidth: 0,
         paddingHorizontal: gutter,
         paddingTop: 14,
         paddingBottom: 6,
@@ -315,7 +318,7 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
       },
       projectHeaderPressed: { backgroundColor: theme.colors.surface1 },
       workspaceHeader: {
-        minHeight: 44,
+        minHeight: layout.compact ? 44 : 32,
         paddingHorizontal: gutter,
         paddingTop: 8,
         paddingBottom: 4,
@@ -711,7 +714,11 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
                 accessibilityLabel={`Open workspace ${collapsedWorkspace.name}`}
                 hitSlop={6}
                 onPress={() => navigation.openWorkspace({ workspaceId: collapsedWorkspaceId })}
-                style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+                style={({ pressed }) => [
+                  styles.iconButton,
+                  styles.projectWorkspaceAction,
+                  pressed && styles.iconButtonPressed,
+                ]}
               >
                 <Icon name="FolderOpen" size={16} color={theme.colors.foregroundMuted} />
               </Pressable>

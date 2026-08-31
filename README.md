@@ -53,7 +53,8 @@ The plugin borrows the selected host's connection; it opens no socket of its own
 
 Host navigation requires Paseo 0.7.0-beta.3 or newer. The SDK capability is optional so older
 clients can still render the monitor, but agent rows and workspace headers remain non-interactive
-there. The plugin does not construct private app URLs or force a full reload.
+there. Synthetic workspace groups are also non-interactive when an agent reports no workspace id.
+The plugin does not construct private app URLs or force a full reload.
 
 Mobile is unverified and probably broken by the host, not by this plugin: plugin surfaces that
 render `ScrollView` or `FlatList` crash on iOS and Android with `useBottomSheetInternal cannot be
