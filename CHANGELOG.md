@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/omercnet/paseo-agent-monitor/compare/v0.2.1...v0.3.0) (2026-09-02)
+
+
+### Features
+
+* **monitor:** use native host navigation ([#16](https://github.com/omercnet/paseo-agent-monitor/issues/16)) ([f2e98b6](https://github.com/omercnet/paseo-agent-monitor/commit/f2e98b6c8adb2b0e1848202c111230f6f39aad06))
+
 ## [0.2.1](https://github.com/omercnet/paseo-agent-monitor/compare/v0.2.0...v0.2.1) (2026-08-28)
 
 
