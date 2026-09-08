@@ -1,3 +1,4 @@
 {
-  "id": "agent-monitor"
+  "id": "agent-monitor",
+  "requirements": { "paseo": "^0.8.0" }
 }

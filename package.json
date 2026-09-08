@@ -19,8 +19,10 @@
     "coding-agents"
   ],
   "files": [
-    "index.ts",
-    "src",
+    "index.client.tsx",
+    "index.server.ts",
+    "client",
+    "shared",
     "docs",
     "paseo-plugin.json",
     "README.md",
@@ -36,10 +38,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
-    "@getpaseo/cli": "^0.7.2",
-    "@getpaseo/client": "^0.7.2",
-    "@getpaseo/plugin": "^0.7.2",
-    "@getpaseo/protocol": "^0.7.2",
+    "@getpaseo/cli": "0.8.0-beta.1",
+    "@getpaseo/client": "0.8.0-beta.1",
+    "@getpaseo/plugin": "0.8.0-beta.1",
+    "@getpaseo/protocol": "0.8.0-beta.1",
     "@tanstack/react-query": "^5.102.3",
     "@types/bun": "^1.4.0",
     "@types/react": "^19.2.18",

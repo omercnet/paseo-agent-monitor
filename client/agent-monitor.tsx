@@ -1,9 +1,16 @@
 import type { PaseoApi, PaseoWorkspace } from "@getpaseo/client";
-import { Icon, type PluginSurfaceProps, usePaseo } from "@getpaseo/plugin";
+import { type PluginSurfaceProps, usePaseo, useSettings } from "@getpaseo/plugin/client";
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
-import { PACKAGE_VERSION } from "../lib/build-version.shared";
+import {
+  DEFAULT_SETTINGS,
+  initialBucket,
+  type MonitorSettings,
+  monitorSettings,
+} from "../shared/monitor-settings";
+import { DiffStat, type DiffStatStyles } from "./diff-stat";
 import {
   type AgentEntry,
   age,
@@ -25,15 +32,7 @@ import {
   type WorkspaceGroup,
   type WorkspaceSummary,
   waitingSince,
-} from "../lib/monitor.shared";
-import {
-  DEFAULT_SETTINGS,
-  initialBucket,
-  loadPersistedState,
-  type MonitorSettings,
-  savePersistedState,
-} from "../lib/monitor-settings";
-import { DiffStat, SettingsPanel, type SettingsPanelStyles } from "./settings-panel.client";
+} from "./monitor";
 
 const PAGE_LIMIT = 200;
 const MAX_PAGES = 10;
@@ -104,7 +103,13 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
   return { entries, directory: { workspaces: workspaceSummaries, projects } };
 }
 
-export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceProps) {
+export function AgentMonitor({
+  theme,
+  layout,
+  host,
+  navigation,
+  onOpenSettings,
+}: PluginSurfaceProps & { onOpenSettings(): void }) {
   const paseo = usePaseo();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-monitor", "agents", host.id], [host.id]);
@@ -114,16 +119,11 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
     refetchInterval: BACKSTOP_REFETCH_MS,
   });
 
-  const [boot] = useState(() => {
-    const persisted = loadPersistedState();
-    return {
-      settings: persisted.settings,
-      selected: initialBucket(persisted.settings, persisted.lastBucket),
-    };
-  });
-  const [settings, setSettings] = useState<MonitorSettings>(boot.settings);
-  const [selected, setSelected] = useState<Bucket | null>(boot.selected);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsState = useSettings(monitorSettings);
+  const settings: MonitorSettings =
+    settingsState.status === "ready" ? settingsState.values : DEFAULT_SETTINGS;
+  const selectionInitialized = useRef(false);
+  const [selected, setSelected] = useState<Bucket | null>(null);
   const [needle, setNeedle] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [sweepArmed, setSweepArmed] = useState(false);
@@ -135,8 +135,10 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
   }, []);
 
   useEffect(() => {
-    savePersistedState({ settings, lastBucket: selected });
-  }, [settings, selected]);
+    if (settingsState.status !== "ready" || selectionInitialized.current) return;
+    selectionInitialized.current = true;
+    setSelected(initialBucket(settingsState.values, null));
+  }, [settingsState]);
 
   useEffect(() => {
     let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -149,10 +151,12 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
     };
     const unsubscribeAgents = paseo.agents.subscribe(invalidate);
     const unsubscribeWorkspaces = paseo.workspaces.subscribe(invalidate);
+    const unsubscribeProjects = paseo.projects.subscribe(invalidate);
     return () => {
       clearTimeout(debounce);
       unsubscribeAgents();
       unsubscribeWorkspaces();
+      unsubscribeProjects();
     };
   }, [paseo, queryClient, queryKey]);
 
@@ -162,14 +166,6 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
-
-  const patchSettings = useCallback((patch: Partial<MonitorSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  const resetSettings = useCallback(() => {
-    setSettings({ ...DEFAULT_SETTINGS });
-  }, []);
 
   const entries = data?.entries ?? [];
   const directory = data?.directory ?? EMPTY_DIRECTORY;
@@ -203,7 +199,6 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
     const rowPad = settings.density === "compact" ? 6 : 10;
     const muted = theme.colors.foregroundMuted;
     const border = theme.colors.border;
-    const fill = { position: "absolute" as const, top: 0, right: 0, bottom: 0, left: 0 };
     const rowAlign = {
       flexDirection: "row" as const,
       alignItems: "center" as const,
@@ -357,132 +352,7 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
       listContent: { paddingTop: 6 },
       empty: { padding: gutter, color: muted },
       error: { paddingHorizontal: gutter, paddingTop: 10, color: theme.colors.statusDanger },
-      settingsOverlay: { ...fill, zIndex: 20, justifyContent: "flex-end" as const },
-      // Alpha composite: the SDK has no scrim token, and a modal scrim must be translucent.
-      settingsBackdrop: { ...fill, backgroundColor: `${theme.colors.foreground}66` },
-      settingsSheet: {
-        alignSelf: "center" as const,
-        width: "100%" as const,
-        maxWidth: 560,
-        maxHeight: "88%" as const,
-        backgroundColor: theme.colors.surface1,
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        paddingHorizontal: gutter,
-        paddingTop: 8,
-        paddingBottom: gutter,
-        borderTopWidth: 1,
-        borderColor: border,
-      },
-      settingsHandle: {
-        alignSelf: "center" as const,
-        width: 36,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: theme.colors.surface2,
-        marginTop: 2,
-        marginBottom: 6,
-      },
-      settingsHeader: {
-        ...rowAlign,
-        justifyContent: "space-between" as const,
-        paddingBottom: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: border,
-      },
-      settingsTitle: { color: theme.colors.foreground, fontSize: 16, fontWeight: "700" as const },
-      settingsCloseButton: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: theme.colors.surface2,
-        alignItems: "center" as const,
-        justifyContent: "center" as const,
-      },
-      settingsCloseText: { color: muted, fontSize: 18, lineHeight: 22, marginTop: -2 },
-      settingsBody: { paddingBottom: 4 },
-      settingsSection: { marginTop: 16 },
-      settingsSectionTitle: {
-        color: muted,
-        fontSize: 11,
-        fontWeight: "700" as const,
-        letterSpacing: 1,
-        textTransform: "uppercase" as const,
-        marginBottom: 8,
-      },
-      settingsGroup: {
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: border,
-        overflow: "hidden" as const,
-      },
-      settingsRow: { paddingHorizontal: 12 },
-      settingsRowDivider: {
-        borderTopWidth: 1,
-        borderTopColor: border,
-      },
-      settingsField: { marginBottom: 12 },
-      settingsFieldLabel: { color: muted, fontSize: 12, marginBottom: 6 },
-      choiceGroup: {
-        flexDirection: "row" as const,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: border,
-        overflow: "hidden" as const,
-      },
-      choiceOption: {
-        flex: 1,
-        minHeight: 34,
-        alignItems: "center" as const,
-        justifyContent: "center" as const,
-        paddingHorizontal: 8,
-        paddingVertical: 7,
-      },
-      choiceOptionDivider: { borderLeftWidth: 1, borderLeftColor: border },
-      choiceOptionOn: { backgroundColor: theme.colors.accent },
-      choiceOptionText: { color: muted, fontSize: 12 },
-      choiceOptionTextOn: {
-        color: theme.colors.accentForeground,
-        fontSize: 12,
-        fontWeight: "600" as const,
-      },
-      toggleRow: {
-        flexDirection: "row" as const,
-        alignItems: "center" as const,
-        gap: 12,
-        paddingVertical: 9,
-      },
-      toggleLabelBlock: { flex: 1, gap: 1 },
-      toggleLabel: { color: theme.colors.foreground, fontSize: 13 },
-      toggleHint: { color: muted, fontSize: 11 },
-      toggleTrack: {
-        width: 36,
-        height: 21,
-        borderRadius: 11,
-        padding: 2,
-        flexDirection: "row" as const,
-        justifyContent: "center" as const,
-        backgroundColor: theme.colors.surface2,
-      },
-      toggleTrackOn: {
-        width: 36,
-        height: 21,
-        borderRadius: 11,
-        padding: 2,
-        flexDirection: "row" as const,
-        justifyContent: "flex-end" as const,
-        backgroundColor: theme.colors.accent,
-      },
-      toggleThumb: {
-        width: 17,
-        height: 17,
-        borderRadius: 9,
-        backgroundColor: theme.colors.surface0,
-      },
-      settingsFooter: { marginTop: 18, alignItems: "center" as const, gap: 4 },
-      settingsReset: { paddingVertical: 6, paddingHorizontal: 10 },
-      settingsVersion: { color: muted, fontSize: 10 },
-    } satisfies Record<string, object> & SettingsPanelStyles;
+    } satisfies Record<string, object> & DiffStatStyles;
   }, [layout.compact, settings.density, theme]);
 
   const renderRow = useCallback(
@@ -759,7 +629,7 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open monitor settings"
-            onPress={() => setSettingsOpen(true)}
+            onPress={onOpenSettings}
             style={styles.gearButton}
           >
             <Icon name="Settings" size={16} color={theme.colors.foregroundMuted} />
@@ -825,6 +695,9 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
         ) : null}
       </View>
       {error ? <Text style={styles.error}>{error.message}</Text> : null}
+      {settingsState.status === "invalid" || settingsState.status === "error" ? (
+        <Text style={styles.error}>Settings: {settingsState.error}</Text>
+      ) : null}
       {archive.error ? <Text style={styles.error}>{archive.error.message}</Text> : null}
       {roster.kind === "compact" ? (
         <FlatList
@@ -854,15 +727,6 @@ export function AgentMonitor({ theme, layout, host, navigation }: PluginSurfaceP
           ListEmptyComponent={empty}
         />
       )}
-      <SettingsPanel
-        open={settingsOpen}
-        settings={settings}
-        styles={styles}
-        version={PACKAGE_VERSION}
-        onChange={patchSettings}
-        onClose={() => setSettingsOpen(false)}
-        onReset={resetSettings}
-      />
     </View>
   );
 }
