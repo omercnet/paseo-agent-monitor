@@ -10,6 +10,13 @@
 
 * **settings:** stop exposing the non-persistent Remember last bucket option
 
+## [0.4.0](https://github.com/omercnet/paseo-agent-monitor/compare/v0.3.0...v0.4.0) (2026-09-08)
+
+
+### Features
+
+* **plugin:** migrate to Paseo 0.8 ([#19](https://github.com/omercnet/paseo-agent-monitor/issues/19)) ([d4c1d95](https://github.com/omercnet/paseo-agent-monitor/commit/d4c1d95d40bab2c4c560565e3a48d5d4df03848e))
+
 ## [0.3.0](https://github.com/omercnet/paseo-agent-monitor/compare/v0.2.1...v0.3.0) (2026-09-02)
 
 
