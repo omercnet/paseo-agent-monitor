@@ -1,4 +1,3 @@
-import type { PaseoApi, PaseoWorkspace } from "@getpaseo/client";
 import { type PluginSurfaceProps, usePaseo, useSettings } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +18,8 @@ import {
   type MonitorDirectory,
   matches,
   PARENT_AGENT_ID_LABEL,
+  type PaseoApi,
+  type PaseoWorkspace,
   type ProjectGroup,
   placement,
   shouldCollapseWorkspace,
