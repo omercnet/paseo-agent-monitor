@@ -17,7 +17,7 @@ import {
   title,
   type WorkspaceSummary,
   waitingSince,
-} from "../src/lib/monitor.shared";
+} from "../client/monitor";
 
 const TRIAGE: GroupOptions = { floatPinned: true, agentSort: "triage" };
 

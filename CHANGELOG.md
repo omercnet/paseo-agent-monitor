@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* **plugin:** migrate to Paseo 0.8 runtime entries and host-scoped settings
+
+### Bug Fixes
+
+* **settings:** stop exposing the non-persistent Remember last bucket option
+
 ## [0.3.0](https://github.com/omercnet/paseo-agent-monitor/compare/v0.2.1...v0.3.0) (2026-09-02)
 
 

@@ -1,72 +1,36 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { type MonitorSettingsState, settingsAreReady } from "../client/settings-state";
 import {
+  DEFAULT_BUCKET_OPTIONS,
   DEFAULT_SETTINGS,
   initialBucket,
-  loadPersistedState,
-  normalizePersistedState,
-  normalizeSettings,
-  SETTINGS_STORAGE_KEY,
-  savePersistedState,
-} from "../src/lib/monitor-settings";
+  monitorSettings,
+} from "../shared/monitor-settings";
 
-function mockLocalStorage(): Storage {
-  const data = new Map<string, string>();
-  return {
-    get length() {
-      return data.size;
-    },
-    clear() {
-      data.clear();
-    },
-    getItem(key: string) {
-      return data.has(key) ? (data.get(key) ?? null) : null;
-    },
-    key(index: number) {
-      return [...data.keys()][index] ?? null;
-    },
-    removeItem(key: string) {
-      data.delete(key);
-    },
-    setItem(key: string, value: string) {
-      data.set(key, String(value));
-    },
-  };
-}
-
-afterEach(() => {
-  Reflect.deleteProperty(globalThis, "localStorage");
-});
-
-describe("normalizeSettings", () => {
-  test("fills defaults for empty and non-object input", () => {
-    expect(normalizeSettings(undefined)).toEqual(DEFAULT_SETTINGS);
-    expect(normalizeSettings(null)).toEqual(DEFAULT_SETTINGS);
-    expect(normalizeSettings("oops")).toEqual(DEFAULT_SETTINGS);
-    expect(normalizeSettings({})).toEqual(DEFAULT_SETTINGS);
+describe("monitor settings document", () => {
+  test("is host-scoped and supplies a complete default document", () => {
+    expect(monitorSettings.id).toBe("monitor");
+    expect(monitorSettings.scope).toBe("host");
+    expect(monitorSettings.version).toBe(1);
+    expect(monitorSettings.schema.parse({})).toEqual(DEFAULT_SETTINGS);
+    expect(DEFAULT_BUCKET_OPTIONS.map(({ id }) => id)).toEqual([
+      "all",
+      "attention",
+      "running",
+      "idle",
+      "closed",
+    ]);
   });
 
-  test("clamps bad enums and keeps valid overrides", () => {
+  test("accepts complete typed overrides and rejects invalid values", () => {
     expect(
-      normalizeSettings({
-        grouping: "galaxy",
-        agentSort: "priority",
-        density: "cozy",
-        defaultBucket: "maybe",
-        floatPinned: false,
-        showAge: false,
-      }),
-    ).toEqual({
-      ...DEFAULT_SETTINGS,
-      floatPinned: false,
-      showAge: false,
-    });
-
-    expect(
-      normalizeSettings({
+      monitorSettings.schema.parse({
         grouping: "compact",
         agentSort: "title",
         density: "compact",
-        defaultBucket: "remember",
+        defaultBucket: "closed",
+        floatPinned: false,
+        showAge: false,
         hideClosedUnlessFiltered: true,
       }),
     ).toEqual({
@@ -74,77 +38,28 @@ describe("normalizeSettings", () => {
       grouping: "compact",
       agentSort: "title",
       density: "compact",
-      defaultBucket: "remember",
+      defaultBucket: "closed",
+      floatPinned: false,
+      showAge: false,
       hideClosedUnlessFiltered: true,
     });
+    expect(() => monitorSettings.schema.parse({ grouping: "galaxy" })).toThrow();
   });
 });
 
-describe("normalizePersistedState", () => {
-  test("normalizes nested settings and lastBucket", () => {
-    expect(normalizePersistedState(undefined)).toEqual({
-      settings: DEFAULT_SETTINGS,
-      lastBucket: null,
-    });
-    expect(
-      normalizePersistedState({
-        settings: { grouping: "workspace", agentSort: "nope" },
-        lastBucket: "running",
-      }),
-    ).toEqual({
-      settings: { ...DEFAULT_SETTINGS, grouping: "workspace" },
-      lastBucket: "running",
-    });
-    expect(normalizePersistedState({ lastBucket: "bogus", grouping: "compact" })).toEqual({
-      settings: { ...DEFAULT_SETTINGS, grouping: "compact" },
-      lastBucket: null,
-    });
-    expect(normalizePersistedState({ lastBucket: null })).toEqual({
-      settings: DEFAULT_SETTINGS,
-      lastBucket: null,
-    });
+describe("settings readiness", () => {
+  test("allows the roster only for a ready settings document", () => {
+    expect(settingsAreReady({ status: "loading" } as unknown as MonitorSettingsState)).toBe(false);
+    expect(settingsAreReady({ status: "error" } as unknown as MonitorSettingsState)).toBe(false);
+    expect(settingsAreReady({ status: "invalid" } as unknown as MonitorSettingsState)).toBe(false);
+    expect(settingsAreReady({ status: "ready" } as unknown as MonitorSettingsState)).toBe(true);
   });
 });
 
 describe("initialBucket", () => {
-  test("maps all / remember / attention defaults", () => {
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "all" }, "running")).toBe(null);
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "remember" }, "idle")).toBe("idle");
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "remember" }, null)).toBe(null);
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "attention" }, "closed")).toBe(
-      "attention",
-    );
-  });
-});
-
-describe("savePersistedState / loadPersistedState", () => {
-  test("roundtrips through a mock localStorage on globalThis", () => {
-    const store = mockLocalStorage();
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      writable: true,
-      value: store,
-    });
-
-    expect(loadPersistedState()).toEqual({ settings: DEFAULT_SETTINGS, lastBucket: null });
-
-    const saved = {
-      settings: {
-        ...DEFAULT_SETTINGS,
-        grouping: "compact" as const,
-        agentSort: "title" as const,
-        defaultBucket: "remember" as const,
-        floatPinned: false,
-      },
-      lastBucket: "attention" as const,
-    };
-    savePersistedState(saved);
-
-    expect(store.getItem(SETTINGS_STORAGE_KEY)).toBeTruthy();
-    expect(loadPersistedState()).toEqual(saved);
-  });
-
-  test("returns defaults when localStorage is missing", () => {
-    expect(loadPersistedState()).toEqual({ settings: DEFAULT_SETTINGS, lastBucket: null });
+  test("maps all and explicit defaults", () => {
+    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "all" })).toBe(null);
+    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "attention" })).toBe("attention");
+    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "closed" })).toBe("closed");
   });
 });

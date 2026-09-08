@@ -3,7 +3,6 @@ import { mkdtemp } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { Glob } from "bun";
 import { build } from "esbuild";
 
 // The daemon compiles plugin server code with esbuild `format: "cjs"` and runs the
@@ -13,14 +12,10 @@ import { build } from "esbuild";
 // surfaces only "Plugin failed to load" with the bare Node error.
 // Mirrors packages/server/src/server/plugins/{compiler,plugin-process}.ts in Paseo.
 const pluginRoot = join(import.meta.dirname, "..");
-const nodeRequire = createRequire(join(pluginRoot, "index.ts"));
+const nodeRequire = createRequire(join(pluginRoot, "index.server.ts"));
 
 const sdkStub = {
-  defineRpc: (contract: unknown) => contract,
-  defineAttachmentSource: (contract: unknown) => contract,
-  Icon() {
-    throw new Error("Icon is available only in plugin client code");
-  },
+  defineSettings: (definition: unknown) => definition,
 };
 
 function runtimeRequire(name: string): unknown {
@@ -47,9 +42,7 @@ async function compileServerBundle(entryPath: string) {
   return { code: result.outputFiles[0]?.text ?? "", warnings: result.warnings };
 }
 
-const serverModules = [...new Glob("src/**/*.ts").scanSync(pluginRoot)]
-  .filter((path) => !path.includes(".client."))
-  .sort();
+const serverModules = ["index.server.ts"];
 
 describe("plugin server bundle", () => {
   test("covers the server-reachable modules", () => {

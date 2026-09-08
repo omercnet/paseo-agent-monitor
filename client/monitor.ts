@@ -1,5 +1,5 @@
 import type { PaseoAgentListResult } from "@getpaseo/client";
-import type { AgentSort, MonitorSettings } from "./monitor-settings";
+import type { AgentSort, MonitorSettings } from "../shared/monitor-settings";
 
 export type AgentEntry = PaseoAgentListResult["entries"][number];
 type AgentSnapshot = AgentEntry["agent"];
