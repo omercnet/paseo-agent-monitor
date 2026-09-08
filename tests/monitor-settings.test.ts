@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SETTINGS, initialBucket, monitorSettings } from "../shared/monitor-settings";
+import { type MonitorSettingsState, settingsAreReady } from "../client/settings-state";
+import {
+  DEFAULT_BUCKET_OPTIONS,
+  DEFAULT_SETTINGS,
+  initialBucket,
+  monitorSettings,
+} from "../shared/monitor-settings";
 
 describe("monitor settings document", () => {
   test("is host-scoped and supplies a complete default document", () => {
@@ -7,6 +13,13 @@ describe("monitor settings document", () => {
     expect(monitorSettings.scope).toBe("host");
     expect(monitorSettings.version).toBe(1);
     expect(monitorSettings.schema.parse({})).toEqual(DEFAULT_SETTINGS);
+    expect(DEFAULT_BUCKET_OPTIONS.map(({ id }) => id)).toEqual([
+      "all",
+      "attention",
+      "running",
+      "idle",
+      "closed",
+    ]);
   });
 
   test("accepts complete typed overrides and rejects invalid values", () => {
@@ -15,7 +28,7 @@ describe("monitor settings document", () => {
         grouping: "compact",
         agentSort: "title",
         density: "compact",
-        defaultBucket: "remember",
+        defaultBucket: "closed",
         floatPinned: false,
         showAge: false,
         hideClosedUnlessFiltered: true,
@@ -25,7 +38,7 @@ describe("monitor settings document", () => {
       grouping: "compact",
       agentSort: "title",
       density: "compact",
-      defaultBucket: "remember",
+      defaultBucket: "closed",
       floatPinned: false,
       showAge: false,
       hideClosedUnlessFiltered: true,
@@ -34,13 +47,19 @@ describe("monitor settings document", () => {
   });
 });
 
+describe("settings readiness", () => {
+  test("allows the roster only for a ready settings document", () => {
+    expect(settingsAreReady({ status: "loading" } as unknown as MonitorSettingsState)).toBe(false);
+    expect(settingsAreReady({ status: "error" } as unknown as MonitorSettingsState)).toBe(false);
+    expect(settingsAreReady({ status: "invalid" } as unknown as MonitorSettingsState)).toBe(false);
+    expect(settingsAreReady({ status: "ready" } as unknown as MonitorSettingsState)).toBe(true);
+  });
+});
+
 describe("initialBucket", () => {
-  test("maps all, remembered, and explicit defaults", () => {
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "all" }, "running")).toBe(null);
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "remember" }, "idle")).toBe("idle");
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "remember" }, null)).toBe(null);
-    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "attention" }, "closed")).toBe(
-      "attention",
-    );
+  test("maps all and explicit defaults", () => {
+    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "all" })).toBe(null);
+    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "attention" })).toBe("attention");
+    expect(initialBucket({ ...DEFAULT_SETTINGS, defaultBucket: "closed" })).toBe("closed");
   });
 });

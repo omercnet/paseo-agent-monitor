@@ -2,14 +2,9 @@ import type { PaseoApi, PaseoWorkspace } from "@getpaseo/client";
 import { type PluginSurfaceProps, usePaseo, useSettings } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
-import {
-  DEFAULT_SETTINGS,
-  initialBucket,
-  type MonitorSettings,
-  monitorSettings,
-} from "../shared/monitor-settings";
+import { initialBucket, type MonitorSettings, monitorSettings } from "../shared/monitor-settings";
 import { DiffStat, type DiffStatStyles } from "./diff-stat";
 import {
   type AgentEntry,
@@ -33,6 +28,7 @@ import {
   type WorkspaceSummary,
   waitingSince,
 } from "./monitor";
+import { settingsAreReady } from "./settings-state";
 
 const PAGE_LIMIT = 200;
 const MAX_PAGES = 10;
@@ -103,13 +99,108 @@ async function loadDirectory(paseo: PaseoApi): Promise<MonitorData> {
   return { entries, directory: { workspaces: workspaceSummaries, projects } };
 }
 
-export function AgentMonitor({
+type AgentMonitorProps = PluginSurfaceProps & { onOpenSettings(): void };
+
+export function AgentMonitor(props: AgentMonitorProps) {
+  const settingsState = useSettings(monitorSettings);
+  const styles = useMemo(
+    () => ({
+      screen: {
+        flex: 1,
+        alignItems: "center" as const,
+        justifyContent: "center" as const,
+        gap: 12,
+        padding: props.layout.compact ? 16 : 24,
+        backgroundColor: props.theme.colors.surface0,
+      },
+      title: { color: props.theme.colors.foreground, fontSize: 16, fontWeight: "600" as const },
+      detail: { color: props.theme.colors.foregroundMuted, textAlign: "center" as const },
+      error: { color: props.theme.colors.statusDanger, textAlign: "center" as const },
+      actions: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 8 },
+      action: {
+        minHeight: 36,
+        justifyContent: "center" as const,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderRadius: 8,
+        borderColor: props.theme.colors.border,
+      },
+      actionText: { color: props.theme.colors.foreground },
+    }),
+    [props.layout.compact, props.theme],
+  );
+
+  if (settingsAreReady(settingsState)) {
+    return <AgentMonitorRoster {...props} settings={settingsState.values} />;
+  }
+
+  if (settingsState.status === "loading") {
+    return (
+      <View style={styles.screen}>
+        <Text style={styles.detail}>Loading monitor settings…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <Text style={styles.title}>
+        {settingsState.status === "invalid"
+          ? "Monitor settings are invalid"
+          : "Settings unavailable"}
+      </Text>
+      <Text accessibilityRole="alert" style={styles.error}>
+        {settingsState.error}
+      </Text>
+      {settingsState.saveError ? (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {settingsState.saveError}
+        </Text>
+      ) : null}
+      <View style={styles.actions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Reload monitor settings"
+          disabled={settingsState.saving}
+          onPress={settingsState.reload}
+          style={styles.action}
+        >
+          <Text style={styles.actionText}>Reload</Text>
+        </Pressable>
+        {settingsState.status === "invalid" ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reset invalid monitor settings"
+            disabled={settingsState.saving}
+            onPress={async () => {
+              await settingsState.reset();
+            }}
+            style={styles.action}
+          >
+            <Text style={styles.actionText}>Reset to defaults</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open monitor settings"
+          onPress={props.onOpenSettings}
+          style={styles.action}
+        >
+          <Text style={styles.actionText}>Open settings</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function AgentMonitorRoster({
   theme,
   layout,
   host,
   navigation,
   onOpenSettings,
-}: PluginSurfaceProps & { onOpenSettings(): void }) {
+  settings,
+}: AgentMonitorProps & { settings: MonitorSettings }) {
   const paseo = usePaseo();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-monitor", "agents", host.id], [host.id]);
@@ -119,11 +210,7 @@ export function AgentMonitor({
     refetchInterval: BACKSTOP_REFETCH_MS,
   });
 
-  const settingsState = useSettings(monitorSettings);
-  const settings: MonitorSettings =
-    settingsState.status === "ready" ? settingsState.values : DEFAULT_SETTINGS;
-  const selectionInitialized = useRef(false);
-  const [selected, setSelected] = useState<Bucket | null>(null);
+  const [selected, setSelected] = useState<Bucket | null>(() => initialBucket(settings));
   const [needle, setNeedle] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [sweepArmed, setSweepArmed] = useState(false);
@@ -133,12 +220,6 @@ export function AgentMonitor({
     const clock = setInterval(() => setNow(Date.now()), CLOCK_INTERVAL_MS);
     return () => clearInterval(clock);
   }, []);
-
-  useEffect(() => {
-    if (settingsState.status !== "ready" || selectionInitialized.current) return;
-    selectionInitialized.current = true;
-    setSelected(initialBucket(settingsState.values, null));
-  }, [settingsState]);
 
   useEffect(() => {
     let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -695,9 +776,6 @@ export function AgentMonitor({
         ) : null}
       </View>
       {error ? <Text style={styles.error}>{error.message}</Text> : null}
-      {settingsState.status === "invalid" || settingsState.status === "error" ? (
-        <Text style={styles.error}>Settings: {settingsState.error}</Text>
-      ) : null}
       {archive.error ? <Text style={styles.error}>{archive.error.message}</Text> : null}
       {roster.kind === "compact" ? (
         <FlatList

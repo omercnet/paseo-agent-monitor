@@ -163,7 +163,6 @@ function Controls({
         <SettingsCard>
           <SettingsSelect
             label="Default bucket"
-            hint="Remember last applies while the monitor surface remains mounted"
             value={settings.values.defaultBucket}
             options={bucketOptions}
             disabled={settings.saving}

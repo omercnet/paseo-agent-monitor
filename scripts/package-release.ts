@@ -13,6 +13,7 @@ const releaseFiles = [
   "client/diff-stat.tsx",
   "client/monitor.ts",
   "client/settings-screen.tsx",
+  "client/settings-state.ts",
   "shared/monitor-settings.ts",
   "docs/images/agent-monitor-roster.png",
   "docs/images/agent-monitor-settings.png",

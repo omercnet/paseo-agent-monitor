@@ -4,8 +4,7 @@ import { z } from "zod";
 export type GroupingMode = "compact" | "workspace" | "project";
 export type AgentSort = "triage" | "updated" | "title";
 export type Density = "comfortable" | "compact";
-export type DefaultBucket = "all" | "attention" | "running" | "idle" | "closed" | "remember";
-export type RememberedBucket = "attention" | "running" | "idle" | "closed" | null;
+export type DefaultBucket = "all" | "attention" | "running" | "idle" | "closed";
 
 export type MonitorSettings = {
   grouping: GroupingMode;
@@ -58,7 +57,7 @@ export const monitorSettingsSchema = z.object({
   showPlacementInCompact: z.boolean().default(DEFAULT_SETTINGS.showPlacementInCompact),
   density: z.enum(["comfortable", "compact"]).default(DEFAULT_SETTINGS.density),
   defaultBucket: z
-    .enum(["all", "attention", "running", "idle", "closed", "remember"])
+    .enum(["all", "attention", "running", "idle", "closed"])
     .default(DEFAULT_SETTINGS.defaultBucket),
   hideClosedUnlessFiltered: z.boolean().default(DEFAULT_SETTINGS.hideClosedUnlessFiltered),
 });
@@ -93,14 +92,8 @@ export const DEFAULT_BUCKET_OPTIONS: readonly { id: DefaultBucket; label: string
   { id: "running", label: "Running" },
   { id: "idle", label: "Idle" },
   { id: "closed", label: "Closed" },
-  { id: "remember", label: "Remember last" },
 ];
 
-export function initialBucket(
-  settings: MonitorSettings,
-  lastBucket: RememberedBucket,
-): RememberedBucket {
-  if (settings.defaultBucket === "all") return null;
-  if (settings.defaultBucket === "remember") return lastBucket;
-  return settings.defaultBucket;
+export function initialBucket(settings: MonitorSettings): Exclude<DefaultBucket, "all"> | null {
+  return settings.defaultBucket === "all" ? null : settings.defaultBucket;
 }

@@ -51,14 +51,11 @@ backstop refetch. The plugin borrows the selected host's connection; it opens no
 
 ## Limits
 
-The **Remember last** default bucket is local to the mounted monitor surface. It is not persisted
-with host settings, so a newly mounted surface starts on All until a bucket is selected.
-
 Interrupting a turn is not part of `PaseoApi`, so archive is the only lifecycle action here.
 
 ## Install
 
-Requires Paseo 0.8.0-beta.1 or newer on the 0.8 release line. The manifest declares
+Requires a compatible Paseo 0.8.x release, including 0.8 prereleases. The manifest declares
 `requirements.paseo` as `^0.8.0`, and the development SDK is pinned to `0.8.0-beta.1`.
 
 Install straight from this repository on the daemon host:
@@ -93,7 +90,7 @@ Release Please maintains the version, changelog, tags, and GitHub releases from 
 Commits. Each release also publishes an `agent-monitor-vX.Y.Z.zip` asset for hosts that cannot
 reach GitHub from the daemon.
 
-The project targets Paseo 0.8 and pins `@getpaseo/plugin`, `@getpaseo/client`,
+The project targets the Paseo 0.8.x release line and pins `@getpaseo/plugin`, `@getpaseo/client`,
 `@getpaseo/protocol`, and `@getpaseo/cli` to `0.8.0-beta.1`. Renovate groups
 `@getpaseo/*` updates so the SDKs move together.
 
