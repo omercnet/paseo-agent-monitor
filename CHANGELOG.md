@@ -10,6 +10,13 @@
 
 * **settings:** stop exposing the non-persistent Remember last bucket option
 
+## [0.4.1](https://github.com/omercnet/paseo-agent-monitor/compare/v0.4.0...v0.4.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* derive API types from plugin SDK ([#21](https://github.com/omercnet/paseo-agent-monitor/issues/21)) ([78b5b63](https://github.com/omercnet/paseo-agent-monitor/commit/78b5b63adc1091d529aca7d1e76f66f9392052bd))
+
 ## [0.4.0](https://github.com/omercnet/paseo-agent-monitor/compare/v0.3.0...v0.4.0) (2026-09-08)
 
 
