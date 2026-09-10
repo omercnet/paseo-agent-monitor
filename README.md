@@ -1,5 +1,16 @@
 # agent-monitor
 
+> [!IMPORTANT]
+> This repository is archived. Development moved to
+> [`omercnet/paseo-plugins/agent-monitor`](https://github.com/omercnet/paseo-plugins/tree/main/agent-monitor).
+> Existing Paseo Git installations remain on this repository. Record any plugin settings, then
+> migrate with:
+>
+> ```bash
+> paseo plugin remove agent-monitor
+> paseo plugin add omercnet/paseo-plugins:agent-monitor
+> ```
+
 One roster for every agent on a daemon. Sidebar surface (`Agent monitor`) plus a global Command
 Center item (`Open agent monitor`).
 
@@ -61,7 +72,7 @@ Requires a compatible Paseo 0.8.x release, including 0.8 prereleases. The manife
 Install straight from this repository on the daemon host:
 
 ```bash
-paseo plugin add omercnet/paseo-agent-monitor
+paseo plugin add omercnet/paseo-plugins:agent-monitor
 paseo plugin update agent-monitor
 ```
 
